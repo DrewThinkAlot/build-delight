@@ -129,7 +129,7 @@ export default function DataImport() {
   const hasChanges = preview && (preview.newTransitions.length > 0 || preview.updatedTransitions.length > 0);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
       <h1 className="text-xl font-bold text-foreground">Data Import</h1>
       <p className="text-sm text-muted-foreground">
         Import historical transition data from MDVIP monthly XLSX files.
