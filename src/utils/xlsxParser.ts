@@ -177,12 +177,21 @@ export function parseTransitionXlsx(
 
     if (!Object.values(colIndexMap).includes('physician_name')) {
       errors.push('Could not find "Account Name" column. Check file format.');
-      return { success: false, data: [], errors, sheetName, totalRows: 0, skippedRows: 0 };
+      return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+    }
+
+    // Build lookup of existing records for dedup
+    const existingMap = new Map<string, HistoricalTransition>();
+    for (const rec of existingRecords) {
+      existingMap.set(dedupKey(rec.physician_name, rec.opening_date), rec);
     }
 
     const dataRows = jsonData.slice(headerRowIdx + 1) as unknown[][];
-    const results: HistoricalTransition[] = [];
-    let skippedRows = 0;
+    const results: ImportRow[] = [];
+    let filteredRows = 0;
+    let newCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
 
     for (const row of dataRows) {
       if (!row || row.every((c) => c === null || c === undefined || c === '')) {
