@@ -684,3 +684,109 @@ export async function saveCalibration(result: RecalibrationResult, label?: strin
 
   if (error) throw error;
 }
+
+// ── Backtest ───────────────────────────────────────────────────────────
+
+export interface BacktestDetail {
+  physician_name: string;
+  risk_score: number;
+  risk_tier: string;
+  pct_to_guidance: number;
+  hit_guidance: boolean;
+  prediction_correct: boolean;
+}
+
+export interface TierAccuracy {
+  tier: string;
+  count: number;
+  actualHitRate: number;
+  expectedDirection: string;
+  correct: boolean;
+}
+
+export interface BacktestResult {
+  totalTransitions: number;
+  tierAccuracy: TierAccuracy[];
+  correlationCorrect: boolean;
+  avgScoreHits: number;
+  avgScoreMisses: number;
+  details: BacktestDetail[];
+}
+
+function numAvg(arr: number[]): number {
+  return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+}
+
+export function runBacktest(
+  transitions: HistoricalTransition[],
+  weights: Weights
+): BacktestResult {
+  const scored: BacktestDetail[] = transitions
+    .filter((t) => t.guidance_number != null && t.pct_to_guidance != null && t.hit_guidance != null)
+    .map((t) => {
+      const input: RiskScoreInput = {
+        coc_type: t.coc_type || "",
+        guidance_number: Number(t.guidance_number),
+        msrp_at_open: t.msrp_at_open != null ? Number(t.msrp_at_open) : null,
+        total_weeks: t.total_weeks != null ? Number(t.total_weeks) : null,
+        state: t.state || "",
+        // Unknown qualitative fields — assume best case (no penalty)
+        physician_full_time: true,
+        physician_has_strong_patient_relationships: true,
+        physician_comfortable_discussing_fees: true,
+        physician_engagement_level: "High",
+        partner_group_aligned: true,
+        medicaid_pct: null,
+        medicare_dual_pct: null,
+        pre_survey_patients: t.pre_survey_patients != null ? Number(t.pre_survey_patients) : null,
+        pre_survey_over_55: t.pre_survey_over_55 != null ? Number(t.pre_survey_over_55) : null,
+      };
+
+      const result = calculateRiskScore(input, weights);
+
+      const isLowRisk = ["LOW", "MODERATE"].includes(result.tier);
+      const predictionCorrect =
+        (isLowRisk && !!t.hit_guidance) || (!isLowRisk && !t.hit_guidance);
+
+      return {
+        physician_name: t.physician_name,
+        risk_score: result.score,
+        risk_tier: result.tier,
+        pct_to_guidance: Number(t.pct_to_guidance),
+        hit_guidance: !!t.hit_guidance,
+        prediction_correct: predictionCorrect,
+      };
+    });
+
+  // Tier accuracy
+  const tiers = ["LOW", "MODERATE", "HIGH", "CRITICAL"];
+  const tierAccuracy: TierAccuracy[] = tiers.map((tier) => {
+    const inTier = scored.filter((s) => s.risk_tier === tier);
+    const hitRate =
+      inTier.length > 0
+        ? inTier.filter((s) => s.hit_guidance).length / inTier.length
+        : 0;
+    const isLowRisk = ["LOW", "MODERATE"].includes(tier);
+    return {
+      tier,
+      count: inTier.length,
+      actualHitRate: hitRate,
+      expectedDirection: isLowRisk
+        ? "Should hit guidance more often"
+        : "Should miss guidance more often",
+      correct: isLowRisk ? hitRate >= 0.6 : hitRate < 0.6,
+    };
+  });
+
+  const hitsAvgScore = numAvg(scored.filter((s) => s.hit_guidance).map((s) => s.risk_score));
+  const missesAvgScore = numAvg(scored.filter((s) => !s.hit_guidance).map((s) => s.risk_score));
+
+  return {
+    totalTransitions: scored.length,
+    tierAccuracy,
+    correlationCorrect: missesAvgScore > hitsAvgScore,
+    avgScoreHits: hitsAvgScore,
+    avgScoreMisses: missesAvgScore,
+    details: scored.sort((a, b) => b.risk_score - a.risk_score),
+  };
+}
