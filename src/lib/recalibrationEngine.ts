@@ -674,7 +674,7 @@ export async function saveCalibration(result: RecalibrationResult, label?: strin
     ),
     overall_hit_rate: result.summary.overall_hit_rate,
     calibration_label: label ?? null,
-  });
+  }]);
 
   if (error) throw error;
 }
