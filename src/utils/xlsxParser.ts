@@ -128,7 +128,10 @@ function deriveCocType(segmentation: string | null): string | null {
   return segmentation.toLowerCase().includes('coc in') ? 'COC In' : 'COC Out';
 }
 
-export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
+export function parseTransitionXlsx(
+  buffer: ArrayBuffer,
+  existingRecords: HistoricalTransition[] = []
+): ParseResult {
   const errors: string[] = [];
   let sheetName: string | null = null;
 
