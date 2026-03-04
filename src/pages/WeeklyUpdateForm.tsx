@@ -200,9 +200,36 @@ export default function WeeklyUpdateForm() {
           <Toggle value={form.physician_coaching_call_completed} onChange={v => set('physician_coaching_call_completed', v)} label="Physician coaching call completed" />
         </section>
 
-        <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
-          Save Weekly Update
-        </button>
+        {!saved ? (
+          <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
+            Save Weekly Update
+          </button>
+        ) : (
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-5 space-y-4">
+            <div className="flex items-center gap-2 text-accent">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-semibold">Weekly update saved</span>
+            </div>
+            <p className="text-sm text-muted-foreground">Generate AI situation analysis? The AI will analyze your update and provide priorities, coaching guidance, and escalation recommendations.</p>
+            {aiLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                Analyzing transition data...
+              </div>
+            )}
+            {aiError && <p className="text-sm text-status-critical">{aiError}</p>}
+            <div className="flex gap-3">
+              <button type="button" onClick={handleGenerateAI} disabled={aiLoading}
+                className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors disabled:opacity-50 flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> Generate Analysis
+              </button>
+              <button type="button" onClick={handleSkip}
+                className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">
+                Skip
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );
