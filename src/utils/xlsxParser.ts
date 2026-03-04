@@ -261,16 +261,38 @@ export function parseTransitionXlsx(
           ? record.paid_members_current - record.opening_balance
           : null;
 
-      results.push(record as HistoricalTransition);
+      const final = record as HistoricalTransition;
+
+      // Deduplication
+      const key = dedupKey(final.physician_name, final.opening_date);
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        const membersChanged = existing.paid_members_current !== final.paid_members_current;
+        const growthChanged = existing.post_open_growth !== final.post_open_growth;
+        if (membersChanged || growthChanged) {
+          results.push({ record: final, action: 'updated' });
+          updatedCount++;
+        } else {
+          results.push({ record: final, action: 'skipped' });
+          skippedCount++;
+        }
+      } else {
+        results.push({ record: final, action: 'new' });
+        newCount++;
+      }
     }
 
     return {
       success: true,
-      data: results,
+      rows: results,
       errors,
       sheetName,
       totalRows: dataRows.length,
-      skippedRows,
+      filteredRows,
+      newCount,
+      updatedCount,
+      skippedCount,
     };
   } catch (err) {
     errors.push(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
