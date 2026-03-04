@@ -3,11 +3,13 @@ import { useTransitions } from '@/contexts/TransitionContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
+import { RiskScoreCard } from '@/components/shared/RiskScoreCard';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Phone, Video, Mail, MessageSquare, MapPin, CheckCircle2, XCircle, Clock, Sparkles } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { ENROLLMENT_CURVE, getExpectedPct } from '@/data/sampleData';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { getActiveWeights, calculateRiskScore, getSimilarTransitions, type ActiveWeightsResult, type RiskScoreResult, type BenchmarkComparison } from '@/lib/riskScorer';
 
 const tabs = ['Overview', 'Weekly Updates', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
 
