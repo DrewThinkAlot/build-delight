@@ -170,11 +170,6 @@ export default function NewTransition() {
     liveRisk.tier === 'HIGH' ? 'border-status-behind' :
     liveRisk.tier === 'MODERATE' ? 'border-status-on-track' : 'border-status-ahead';
 
-  const tierBg = !liveRisk ? 'bg-muted/30' :
-    liveRisk.tier === 'CRITICAL' ? 'bg-status-critical/10' :
-    liveRisk.tier === 'HIGH' ? 'bg-status-behind/10' :
-    liveRisk.tier === 'MODERATE' ? 'bg-status-on-track/10' : 'bg-status-ahead/10';
-
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-bold text-foreground mb-6">New Transition</h1>
