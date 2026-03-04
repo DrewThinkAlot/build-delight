@@ -64,7 +64,7 @@ export default function TransitionDetail() {
   }, [transition, calibration]);
 
   const comparisons: BenchmarkComparison[] = useMemo(() => {
-    if (!calibration) return [];
+    if (!calibration || !transition) return [];
     return getSimilarTransitions({
       coc_type: transition.coc_type || '', guidance_number: transition.guidance_number,
       msrp_at_open: null, total_weeks: null, state: transition.state || '',
