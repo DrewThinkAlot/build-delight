@@ -375,9 +375,23 @@ export default function TransitionDetail() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         <div className="space-y-6">
+          {/* Weekly Intelligence - ABOVE existing content */}
+          {intel && (
+            <WeeklyIntelligencePanel
+              transition={transition}
+              intel={intel}
+              onRefresh={refreshIntel}
+              onOpenSnapshot={() => setSnapshotModalOpen(true)}
+            />
+          )}
+
+          {/* Static Intake Risk + Progress */}
           <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
-            {/* Risk score card */}
-            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
+            {/* Risk score card - labeled as Static Intake Risk */}
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Static Intake Risk</p>
+              <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
+            </div>
 
             <div className="space-y-4">
               {/* Pacing */}
