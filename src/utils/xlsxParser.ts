@@ -238,15 +238,15 @@ export function parseTransitionXlsx(
       // Filter rules
       const name = (record.physician_name ?? '').toLowerCase();
       if (!record.physician_name || name === 'totals' || name === 'averages') {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
       if (record.guidance_number == null || record.guidance_number <= 0) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
       if (record.opening_balance == null) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
 
