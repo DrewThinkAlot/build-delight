@@ -199,115 +199,116 @@ function generateBenchmarks(
   transitions: HistoricalTransition[],
   stateDetails: Record<string, { hit_rate: number; n: number }>
 ): Benchmarks {
-  const overallHitRate = weightedHitRate(transitions);
-  const valid = transitions.filter((t) => t.pct_to_guidance != null);
   const hits = transitions.filter((t) => t.hit_guidance);
   const misses = transitions.filter((t) => !t.hit_guidance);
 
   const avg = (arr: number[]) =>
-    arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
+    arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
 
-  const avgPctToGuidance = avg(valid.map((t) => Number(t.pct_to_guidance)));
-  const avgYieldHit = avg(
-    hits.filter((t) => t.actual_yield != null).map((t) => Number(t.actual_yield))
-  );
-  const avgYieldMissed = avg(
-    misses.filter((t) => t.actual_yield != null).map((t) => Number(t.actual_yield))
-  );
-  const avgPostOpenGrowth = avg(
-    transitions
-      .filter((t) => t.post_open_growth != null)
-      .map((t) => Number(t.post_open_growth))
-  );
-
-  // Near-miss recovery: transitions that were 80-99% to guidance and eventually hit
-  const nearMisses = transitions.filter(
-    (t) =>
-      t.pct_to_guidance != null &&
-      Number(t.pct_to_guidance) >= 0.8 &&
-      Number(t.pct_to_guidance) < 1
-  );
-  const nearMissRecoveries = nearMisses.filter((t) => t.hit_guidance);
-  const recoveryRate =
-    nearMisses.length > 0 ? nearMissRecoveries.length / nearMisses.length : 0;
-
-  // By COC type
-  const hitRateByCoc: Record<string, { rate: number; n: number }> = {};
-  const cocGroups = groupBy(transitions, (t) => t.coc_type ?? "Unknown");
-  for (const [coc, group] of Object.entries(cocGroups)) {
-    hitRateByCoc[coc] = { rate: weightedHitRate(group), n: group.length };
+  // COC type benchmarks — normalize segmentation to standard keys
+  const cocGroups: Record<string, HistoricalTransition[]> = {};
+  for (const t of transitions) {
+    const seg = t.segmentation || "Unknown";
+    let key = "Unknown";
+    if (seg.includes("Family") && seg.includes("COC In")) key = "FM COC In";
+    else if (seg.includes("Family") && seg.includes("COC Out")) key = "FM COC Out";
+    else if (seg.includes("Internal") && seg.includes("COC In")) key = "IM COC In";
+    else if (seg.includes("Internal") && seg.includes("COC Out")) key = "IM COC Out";
+    else if (seg.includes("Specialty")) key = "Specialty";
+    if (!cocGroups[key]) cocGroups[key] = [];
+    cocGroups[key].push(t);
   }
 
-  // By size brackets
-  const sizeBrackets: Record<string, { max: number; filter: (n: number) => boolean }> = {
-    "Small (≤125)": { max: 125, filter: (n) => n <= 125 },
-    "Medium (126-250)": { max: 250, filter: (n) => n > 125 && n <= 250 },
-    "Medium-Large (251-400)": { max: 400, filter: (n) => n > 250 && n <= 400 },
-    "Large (>400)": { max: 9999, filter: (n) => n > 400 },
+  const hit_rate_by_coc: Record<string, { rate: number; n: number }> = {};
+  for (const [key, group] of Object.entries(cocGroups)) {
+    if (key === "Unknown") continue;
+    hit_rate_by_coc[key] = { rate: weightedHitRate(group), n: group.length };
+  }
+
+  // Size bracket benchmarks
+  const sizeGroups = {
+    small: transitions.filter((t) => t.guidance_number != null && Number(t.guidance_number) <= 125),
+    medium: transitions.filter(
+      (t) => t.guidance_number != null && Number(t.guidance_number) > 125 && Number(t.guidance_number) <= 250
+    ),
+    large: transitions.filter(
+      (t) => t.guidance_number != null && Number(t.guidance_number) > 250 && Number(t.guidance_number) <= 400
+    ),
   };
-  const hitRateBySize: Record<string, { max: number; rate: number; n: number }> = {};
-  for (const [label, { max, filter }] of Object.entries(sizeBrackets)) {
-    const group = transitions.filter(
-      (t) => t.guidance_number != null && filter(Number(t.guidance_number))
-    );
-    if (group.length > 0) {
-      hitRateBySize[label] = { max, rate: weightedHitRate(group), n: group.length };
-    }
-  }
 
-  // By MSRP
-  const msrpBrackets: Record<string, (m: number) => boolean> = {
-    "Under $2,000": (m) => m < 2000,
-    "$2,000-$2,500": (m) => m >= 2000 && m <= 2500,
-    "$2,500-$2,700": (m) => m > 2500 && m <= 2700,
-    "Over $2,700": (m) => m > 2700,
+  const hit_rate_by_size: Record<string, { rate: number; n: number; max: number }> = {
+    small: { rate: weightedHitRate(sizeGroups.small), n: sizeGroups.small.length, max: 125 },
+    medium: { rate: weightedHitRate(sizeGroups.medium), n: sizeGroups.medium.length, max: 250 },
+    large: { rate: weightedHitRate(sizeGroups.large), n: sizeGroups.large.length, max: 400 },
   };
-  const hitRateByMsrp: Record<string, { rate: number; n: number }> = {};
-  for (const [label, filter] of Object.entries(msrpBrackets)) {
-    const group = transitions.filter(
-      (t) => t.msrp_at_open != null && filter(Number(t.msrp_at_open))
-    );
-    if (group.length > 0) {
-      hitRateByMsrp[label] = { rate: weightedHitRate(group), n: group.length };
-    }
-  }
 
-  // By state (reuse stateDetails)
-  const hitRateByState: Record<string, { rate: number; n: number }> = {};
-  for (const [state, info] of Object.entries(stateDetails)) {
-    hitRateByState[state] = { rate: info.hit_rate, n: info.n };
-  }
+  // MSRP benchmarks
+  const msrpValid = transitions.filter((t) => t.msrp_at_open != null);
+  const hit_rate_by_msrp: Record<string, { rate: number; n: number }> = {
+    under_2200: (() => {
+      const g = msrpValid.filter((t) => Number(t.msrp_at_open) <= 2200);
+      return { rate: weightedHitRate(g), n: g.length };
+    })(),
+    "2200_to_2700": (() => {
+      const g = msrpValid.filter((t) => Number(t.msrp_at_open) > 2200 && Number(t.msrp_at_open) <= 2700);
+      return { rate: weightedHitRate(g), n: g.length };
+    })(),
+    over_2700: (() => {
+      const g = msrpValid.filter((t) => Number(t.msrp_at_open) > 2700);
+      return { rate: weightedHitRate(g), n: g.length };
+    })(),
+  };
 
-  // By fiscal month
-  const hitRateByMonth: Record<string, { rate: number; n: number }> = {};
-  const monthGroups = groupBy(transitions, (t) => t.fiscal_month ?? "Unknown");
+  // Month benchmarks
+  const monthGroups: Record<string, HistoricalTransition[]> = {};
+  for (const t of transitions) {
+    if (!t.fiscal_month) continue;
+    if (!monthGroups[t.fiscal_month]) monthGroups[t.fiscal_month] = [];
+    monthGroups[t.fiscal_month].push(t);
+  }
+  const hit_rate_by_month: Record<string, { rate: number; n: number }> = {};
   for (const [month, group] of Object.entries(monthGroups)) {
-    hitRateByMonth[month] = { rate: weightedHitRate(group), n: group.length };
+    hit_rate_by_month[month] = { rate: weightedHitRate(group), n: group.length };
   }
+
+  // State benchmarks (reuse stateDetails from caller)
+  const hit_rate_by_state: Record<string, { rate: number; n: number }> = {};
+  for (const [state, detail] of Object.entries(stateDetails)) {
+    hit_rate_by_state[state] = { rate: detail.hit_rate, n: detail.n };
+  }
+
+  // Near-miss recovery: transitions at 60-80% guidance that later reached 80%+
+  const nearMisses = transitions.filter(
+    (t) => t.pct_to_guidance != null && Number(t.pct_to_guidance) >= 0.6 && Number(t.pct_to_guidance) < 0.8
+  );
+  const recovered = nearMisses.filter(
+    (t) =>
+      t.paid_members_current != null &&
+      t.guidance_number != null &&
+      Number(t.guidance_number) > 0 &&
+      Number(t.paid_members_current) / Number(t.guidance_number) >= 0.8
+  );
+  const recoveryRate = nearMisses.length > 0 ? recovered.length / nearMisses.length : 0;
 
   return {
-    overall_hit_rate: overallHitRate,
+    overall_hit_rate: weightedHitRate(transitions),
     n_transitions: transitions.length,
-    avg_pct_to_guidance: avgPctToGuidance,
-    avg_yield_hit: avgYieldHit,
-    avg_yield_missed: avgYieldMissed,
-    avg_post_open_growth: avgPostOpenGrowth,
+    avg_pct_to_guidance: avg(
+      transitions.filter((t) => t.pct_to_guidance != null).map((t) => Number(t.pct_to_guidance))
+    ),
+    avg_yield_hit: avg(hits.filter((t) => t.actual_yield != null).map((t) => Number(t.actual_yield))),
+    avg_yield_missed: avg(misses.filter((t) => t.actual_yield != null).map((t) => Number(t.actual_yield))),
+    avg_post_open_growth: avg(
+      transitions.filter((t) => t.post_open_growth != null).map((t) => Number(t.post_open_growth))
+    ),
     recovery_rate_near_miss: recoveryRate,
-    hit_rate_by_coc: hitRateByCoc,
-    hit_rate_by_size: hitRateBySize,
-    hit_rate_by_msrp: hitRateByMsrp,
-    hit_rate_by_state: hitRateByState,
-    hit_rate_by_month: hitRateByMonth,
+    hit_rate_by_coc,
+    hit_rate_by_size,
+    hit_rate_by_msrp,
+    hit_rate_by_state,
+    hit_rate_by_month,
   };
 }
-
-function groupBy<T>(arr: T[], keyFn: (item: T) => string): Record<string, T[]> {
-  const result: Record<string, T[]> = {};
-  for (const item of arr) {
-    const key = keyFn(item);
-    if (!result[key]) result[key] = [];
-    result[key].push(item);
-  }
   return result;
 }
 
