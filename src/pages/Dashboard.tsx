@@ -4,13 +4,30 @@ import { MetricCard } from '@/components/shared/MetricCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
-import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, Phone, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, Phone, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const { transitions, getLatestUpdate, getAlertsForTransition, weeklyUpdates, coachingLogs } = useTransitions();
   const [showOnTrack, setShowOnTrack] = useState(false);
+  const [recalBanner, setRecalBanner] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [{ data: activeCalib }, { count: totalCount }] = await Promise.all([
+          supabase.from('risk_weights').select('calibration_date, n_transitions').eq('is_active', true).order('calibration_date', { ascending: false }).limit(1).single(),
+          supabase.from('historical_transitions').select('id', { count: 'exact', head: true }),
+        ]);
+        if (activeCalib && totalCount != null) {
+          const newSince = totalCount - activeCalib.n_transitions;
+          if (newSince >= 15) setRecalBanner({ show: true, count: newSince });
+        }
+      } catch { /* silent */ }
+    })();
+  }, []);
 
   const active = transitions.filter(t => t.status === 'active');
   const completed = transitions.filter(t => t.status === 'completed');
