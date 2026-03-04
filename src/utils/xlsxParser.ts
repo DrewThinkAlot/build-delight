@@ -1,13 +1,15 @@
 import * as XLSX from 'xlsx';
 
-export interface HistoricalTransition {
+// ─── Interfaces ────────────────────────────────────────────────
+
+export interface ParsedTransition {
   physician_name: string;
   physician_id: string | null;
   opening_date: string | null;
   fiscal_month: string | null;
-  guidance_number: number | null;
-  opening_balance: number | null;
-  pct_to_guidance: number | null;
+  guidance_number: number;
+  opening_balance: number;
+  pct_to_guidance: number;
   hit_guidance: boolean;
   pre_survey_patients: number | null;
   pre_survey_over_55: number | null;
@@ -23,33 +25,56 @@ export interface HistoricalTransition {
   actual_yield: number | null;
   paid_members_current: number | null;
   post_open_growth: number | null;
+  source_file: string;
+  data_vintage: string; // YYYY-MM-DD
 }
 
-export type ImportAction = 'new' | 'updated' | 'skipped';
-
-export interface ImportRow {
-  record: HistoricalTransition;
-  action: ImportAction;
+export interface UpdatedTransition {
+  physician_name: string;
+  opening_date: string | null;
+  old_paid_members: number | null;
+  new_paid_members: number | null;
+  old_post_open_growth: number | null;
+  new_post_open_growth: number | null;
+  full_record: ParsedTransition;
 }
 
-export interface ParseResult {
-  success: boolean;
-  rows: ImportRow[];
-  errors: string[];
+export interface SkippedTransition {
+  physician_name: string;
+  opening_date: string | null;
+  reason: 'unchanged' | 'duplicate';
+}
+
+export interface ParseError {
+  row: number;
+  physician_name: string | null;
+  error: string;
+}
+
+export interface ImportPreview {
+  fileName: string;
+  sheetFound: boolean;
   sheetName: string | null;
   totalRows: number;
+  guidedTransitions: number;
   filteredRows: number;
-  newCount: number;
-  updatedCount: number;
-  skippedCount: number;
+  newTransitions: ParsedTransition[];
+  updatedTransitions: UpdatedTransition[];
+  skippedTransitions: SkippedTransition[];
+  errors: ParseError[];
 }
 
-function dedupKey(name: string, date: string | null): string {
-  return `${name.trim().toLowerCase()}|${(date ?? '').trim()}`;
+// Existing DB record shape (subset needed for dedup)
+export interface ExistingRecord {
+  physician_name: string;
+  opening_date: string | null;
+  paid_members_current: number | null;
+  post_open_growth: number | null;
 }
 
-// Column name mapping — keys are lowercased/trimmed spreadsheet headers
-const COLUMN_MAP: Record<string, keyof HistoricalTransition> = {
+// ─── Column mapping ────────────────────────────────────────────
+
+const COLUMN_MAP: Record<string, string> = {
   'account name': 'physician_name',
   'physicianid': 'physician_id',
   'physician id': 'physician_id',
@@ -77,17 +102,20 @@ const COLUMN_MAP: Record<string, keyof HistoricalTransition> = {
   'number of paid members': 'paid_members_current',
 };
 
+const STRING_FIELDS = new Set(['physician_name', 'physician_id', 'fiscal_month', 'segmentation', 'state', 'city']);
+const DATE_FIELDS = new Set(['opening_date']);
+const NUMBER_FIELDS = new Set([
+  'guidance_number', 'opening_balance', 'pre_survey_patients', 'pre_survey_over_55',
+  'post_survey_patients', 'wtc_55_plus', 'msrp_at_open', 'total_weeks',
+  'expected_yield', 'actual_yield', 'paid_members_current',
+]);
+
+// ─── Helpers ───────────────────────────────────────────────────
+
 function findSheet(workbook: XLSX.WorkBook): string | null {
-  const target = 'fytd open transitions';
-  // Exact-ish match first
-  const match = workbook.SheetNames.find(
-    (name) => name.toLowerCase().includes(target)
-  );
+  const match = workbook.SheetNames.find(n => n.toLowerCase().includes('fytd open transitions'));
   if (match) return match;
-  // Fallback: partial match on "open transitions"
-  const partial = workbook.SheetNames.find(
-    (name) => name.toLowerCase().includes('open transitions')
-  );
+  const partial = workbook.SheetNames.find(n => n.toLowerCase().includes('open transitions'));
   return partial ?? null;
 }
 
@@ -104,198 +132,216 @@ function toStr(val: unknown): string | null {
 
 function parseDate(val: unknown): string | null {
   if (val === null || val === undefined || val === '') return null;
-  // SheetJS may return a JS Date or a serial number
-  if (val instanceof Date) {
-    return val.toISOString().split('T')[0];
-  }
+  if (val instanceof Date) return val.toISOString().split('T')[0];
   if (typeof val === 'number') {
-    // Excel serial date
     const d = XLSX.SSF.parse_date_code(val);
-    if (d) {
-      const month = String(d.m).padStart(2, '0');
-      const day = String(d.d).padStart(2, '0');
-      return `${d.y}-${month}-${day}`;
-    }
+    if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
   }
-  // Try string parse
   const d = new Date(String(val));
   if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
   return String(val).trim();
 }
 
-function deriveCocType(segmentation: string | null): string | null {
-  if (!segmentation) return null;
-  return segmentation.toLowerCase().includes('coc in') ? 'COC In' : 'COC Out';
+function deriveCocType(seg: string | null): string | null {
+  if (!seg) return null;
+  return seg.toLowerCase().includes('coc in') ? 'COC In' : 'COC Out';
 }
+
+function dedupKey(name: string, date: string | null): string {
+  return `${name.trim().toLowerCase()}|${(date ?? '').trim()}`;
+}
+
+function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ─── Main parser ───────────────────────────────────────────────
 
 export function parseTransitionXlsx(
   buffer: ArrayBuffer,
-  existingRecords: HistoricalTransition[] = []
-): ParseResult {
-  const errors: string[] = [];
-  let sheetName: string | null = null;
+  fileName: string,
+  existingRecords: ExistingRecord[] = []
+): ImportPreview {
+  const errors: ParseError[] = [];
+  const result: ImportPreview = {
+    fileName,
+    sheetFound: false,
+    sheetName: null,
+    totalRows: 0,
+    guidedTransitions: 0,
+    filteredRows: 0,
+    newTransitions: [],
+    updatedTransitions: [],
+    skippedTransitions: [],
+    errors,
+  };
 
   try {
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-    sheetName = findSheet(workbook);
+    let sheetName = findSheet(workbook);
 
-    if (!sheetName) {
-      // Fallback: use first sheet
+    if (sheetName) {
+      result.sheetFound = true;
+    } else {
       sheetName = workbook.SheetNames[0] ?? null;
-    if (!sheetName) {
-      return { success: false, rows: [], errors: ['No sheets found in workbook'], sheetName: null, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+      if (!sheetName) {
+        errors.push({ row: 0, physician_name: null, error: 'No sheets found in workbook' });
+        return result;
+      }
+      errors.push({ row: 0, physician_name: null, error: `Sheet "FYTD Open Transitions" not found. Using "${sheetName}".` });
     }
-      errors.push(`Sheet "FYTD Open Transitions" not found. Using "${sheetName}" instead.`);
-    }
+    result.sheetName = sheetName;
 
     const sheet = workbook.Sheets[sheetName];
-
-    // Try header at row 9 (0-indexed 8), then row 1 as fallback
     const jsonData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as unknown[][];
 
-    // Find header row — look for a row containing "Account Name" (case-insensitive)
-    let headerRowIdx = 8; // default row 9
+    // Find header row
+    let headerRowIdx = 8;
     for (let i = 0; i < Math.min(20, jsonData.length); i++) {
-      const row = jsonData[i] as unknown[];
-      if (row && row.some((cell) => String(cell ?? '').toLowerCase().includes('account name'))) {
+      const row = jsonData[i];
+      if (row && row.some(cell => String(cell ?? '').toLowerCase().includes('account name'))) {
         headerRowIdx = i;
         break;
       }
     }
 
-    const rawHeaders = (jsonData[headerRowIdx] as unknown[]) ?? [];
-    const headers = rawHeaders.map((h) => String(h ?? '').trim().toLowerCase());
+    const rawHeaders = jsonData[headerRowIdx] ?? [];
+    const headers = rawHeaders.map(h => String(h ?? '').trim().toLowerCase());
 
     // Build column index map
-    const colIndexMap: Record<number, keyof HistoricalTransition> = {};
+    const colIndexMap: Record<number, string> = {};
     headers.forEach((header, idx) => {
       const mapped = COLUMN_MAP[header];
-      if (mapped) {
-        colIndexMap[idx] = mapped;
-      }
+      if (mapped) colIndexMap[idx] = mapped;
     });
 
     if (!Object.values(colIndexMap).includes('physician_name')) {
-      errors.push('Could not find "Account Name" column. Check file format.');
-      return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+      errors.push({ row: headerRowIdx + 1, physician_name: null, error: 'Could not find "Account Name" column.' });
+      return result;
     }
 
-    // Build lookup of existing records for dedup
-    const existingMap = new Map<string, HistoricalTransition>();
+    const dataRows = jsonData.slice(headerRowIdx + 1);
+    result.totalRows = dataRows.length;
+
+    // Build existing lookup
+    const existingMap = new Map<string, ExistingRecord>();
     for (const rec of existingRecords) {
       existingMap.set(dedupKey(rec.physician_name, rec.opening_date), rec);
     }
 
-    const dataRows = jsonData.slice(headerRowIdx + 1) as unknown[][];
-    const results: ImportRow[] = [];
-    let filteredRows = 0;
-    let newCount = 0;
-    let updatedCount = 0;
-    let skippedCount = 0;
+    const dataVintage = todayISO();
 
-    for (const row of dataRows) {
-      if (!row || row.every((c) => c === null || c === undefined || c === '')) {
-        filteredRows++;
+    for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+      const row = dataRows[rowIdx];
+      const excelRow = headerRowIdx + 2 + rowIdx; // 1-indexed excel row
+
+      if (!row || row.every(c => c === null || c === undefined || c === '')) {
+        result.filteredRows++;
         continue;
       }
 
-      const record: Partial<HistoricalTransition> = {};
-
+      // Extract raw values
+      const raw: Record<string, unknown> = {};
       for (const [idxStr, field] of Object.entries(colIndexMap)) {
-        const idx = Number(idxStr);
-        const val = row[idx];
-
-        switch (field) {
-          case 'physician_name':
-          case 'physician_id':
-          case 'fiscal_month':
-          case 'segmentation':
-          case 'state':
-          case 'city':
-            record[field] = toStr(val);
-            break;
-          case 'opening_date':
-            record[field] = parseDate(val);
-            break;
-          case 'guidance_number':
-          case 'opening_balance':
-          case 'pre_survey_patients':
-          case 'pre_survey_over_55':
-          case 'post_survey_patients':
-          case 'wtc_55_plus':
-          case 'msrp_at_open':
-          case 'total_weeks':
-          case 'expected_yield':
-          case 'actual_yield':
-          case 'paid_members_current':
-            record[field] = toNumber(val);
-            break;
-          default:
-            break;
-        }
+        raw[field] = row[Number(idxStr)];
       }
 
-      // Filter rules
-      const name = (record.physician_name ?? '').toLowerCase();
-      if (!record.physician_name || name === 'totals' || name === 'averages') {
-        filteredRows++;
+      const physicianName = toStr(raw.physician_name);
+
+      // Filter: empty / summary rows
+      if (!physicianName) { result.filteredRows++; continue; }
+      const nameLower = physicianName.toLowerCase();
+      if (nameLower === 'totals' || nameLower === 'averages') { result.filteredRows++; continue; }
+
+      // Parse fields
+      const record: Record<string, unknown> = { physician_name: physicianName };
+      for (const [field, val] of Object.entries(raw)) {
+        if (field === 'physician_name') continue;
+        if (STRING_FIELDS.has(field)) record[field] = toStr(val);
+        else if (DATE_FIELDS.has(field)) record[field] = parseDate(val);
+        else if (NUMBER_FIELDS.has(field)) record[field] = toNumber(val);
+      }
+
+      // Filter: guidance_number must be > 0
+      const guidanceNumber = toNumber(raw.guidance_number);
+      if (guidanceNumber === null || guidanceNumber <= 0) {
+        result.filteredRows++;
         continue;
       }
-      if (record.guidance_number == null || record.guidance_number <= 0) {
-        filteredRows++;
+
+      // Filter: opening_balance must be numeric
+      const openingBalance = toNumber(raw.opening_balance);
+      if (openingBalance === null) {
+        result.filteredRows++;
         continue;
       }
-      if (record.opening_balance == null) {
-        filteredRows++;
-        continue;
-      }
+
+      result.guidedTransitions++;
 
       // Calculated fields
-      const guidance = record.guidance_number ?? 0;
-      const opening = record.opening_balance ?? 0;
-      record.pct_to_guidance = guidance > 0 ? Math.round((opening / guidance) * 10000) / 10000 : null;
-      record.hit_guidance = (record.pct_to_guidance ?? 0) >= 0.80;
-      record.coc_type = deriveCocType(record.segmentation ?? null);
-      record.post_open_growth =
-        record.paid_members_current != null && record.opening_balance != null
-          ? record.paid_members_current - record.opening_balance
-          : null;
+      const pctToGuidance = Math.round((openingBalance / guidanceNumber) * 10000) / 10000;
+      const paidMembersCurrent = toNumber(raw.paid_members_current);
+      const postOpenGrowth = paidMembersCurrent != null ? paidMembersCurrent - openingBalance : null;
 
-      const final = record as HistoricalTransition;
+      const parsed: ParsedTransition = {
+        physician_name: physicianName,
+        physician_id: (record.physician_id as string | null) ?? null,
+        opening_date: (record.opening_date as string | null) ?? null,
+        fiscal_month: (record.fiscal_month as string | null) ?? null,
+        guidance_number: guidanceNumber,
+        opening_balance: openingBalance,
+        pct_to_guidance: pctToGuidance,
+        hit_guidance: pctToGuidance >= 0.80,
+        pre_survey_patients: (record.pre_survey_patients as number | null) ?? null,
+        pre_survey_over_55: (record.pre_survey_over_55 as number | null) ?? null,
+        post_survey_patients: (record.post_survey_patients as number | null) ?? null,
+        wtc_55_plus: (record.wtc_55_plus as number | null) ?? null,
+        segmentation: (record.segmentation as string | null) ?? null,
+        coc_type: deriveCocType((record.segmentation as string | null) ?? null),
+        state: (record.state as string | null) ?? null,
+        city: (record.city as string | null) ?? null,
+        msrp_at_open: (record.msrp_at_open as number | null) ?? null,
+        total_weeks: (record.total_weeks as number | null) ?? null,
+        expected_yield: (record.expected_yield as number | null) ?? null,
+        actual_yield: (record.actual_yield as number | null) ?? null,
+        paid_members_current: paidMembersCurrent,
+        post_open_growth: postOpenGrowth,
+        source_file: fileName,
+        data_vintage: dataVintage,
+      };
 
       // Deduplication
-      const key = dedupKey(final.physician_name, final.opening_date);
+      const key = dedupKey(physicianName, parsed.opening_date);
       const existing = existingMap.get(key);
 
       if (existing) {
-        const membersChanged = existing.paid_members_current !== final.paid_members_current;
-        const growthChanged = existing.post_open_growth !== final.post_open_growth;
+        const membersChanged = existing.paid_members_current !== paidMembersCurrent;
+        const growthChanged = existing.post_open_growth !== postOpenGrowth;
         if (membersChanged || growthChanged) {
-          results.push({ record: final, action: 'updated' });
-          updatedCount++;
+          result.updatedTransitions.push({
+            physician_name: physicianName,
+            opening_date: parsed.opening_date,
+            old_paid_members: existing.paid_members_current,
+            new_paid_members: paidMembersCurrent,
+            old_post_open_growth: existing.post_open_growth,
+            new_post_open_growth: postOpenGrowth,
+            full_record: parsed,
+          });
         } else {
-          results.push({ record: final, action: 'skipped' });
-          skippedCount++;
+          result.skippedTransitions.push({
+            physician_name: physicianName,
+            opening_date: parsed.opening_date,
+            reason: 'unchanged',
+          });
         }
       } else {
-        results.push({ record: final, action: 'new' });
-        newCount++;
+        result.newTransitions.push(parsed);
       }
     }
 
-    return {
-      success: true,
-      rows: results,
-      errors,
-      sheetName,
-      totalRows: dataRows.length,
-      filteredRows,
-      newCount,
-      updatedCount,
-      skippedCount,
-    };
+    return result;
   } catch (err) {
-    errors.push(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
-    return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+    errors.push({ row: 0, physician_name: null, error: `Parse error: ${err instanceof Error ? err.message : String(err)}` });
+    return result;
   }
 }

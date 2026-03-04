@@ -1,46 +1,66 @@
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, RefreshCw, MinusCircle } from 'lucide-react';
-import { useState, useRef, useCallback } from 'react';
-import { parseTransitionXlsx, ParseResult, HistoricalTransition, ImportAction } from '@/utils/xlsxParser';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, RefreshCw, MinusCircle, Database } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { parseTransitionXlsx, ImportPreview, ParsedTransition } from '@/utils/xlsxParser';
+import { confirmImport, fetchExistingRecords } from '@/utils/importService';
 import { toast } from 'sonner';
-
-const ACTION_STYLES: Record<ImportAction, { label: string; cls: string }> = {
-  new: { label: 'New', cls: 'text-status-ahead' },
-  updated: { label: 'Updated', cls: 'text-accent' },
-  skipped: { label: 'No change', cls: 'text-muted-foreground' },
-};
 
 export default function DataImport() {
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [result, setResult] = useState<ParseResult | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  // Simulated existing records for dedup (will come from DB later)
-  const [existingRecords] = useState<HistoricalTransition[]>([]);
+  const [committing, setCommitting] = useState(false);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [committed, setCommitted] = useState(false);
+  const [existingRecords, setExistingRecords] = useState<{ physician_name: string; opening_date: string | null; paid_members_current: number | null; post_open_growth: number | null }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing records on mount for dedup
+  useEffect(() => {
+    fetchExistingRecords()
+      .then(setExistingRecords)
+      .catch(err => console.error('Failed to fetch existing records:', err));
+  }, []);
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
       toast.error('Please upload an XLSX file.');
       return;
     }
-    setFileName(file.name);
     setParsing(true);
-    setResult(null);
+    setPreview(null);
+    setCommitted(false);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseTransitionXlsx(buffer, existingRecords);
-      setResult(parsed);
-      if (parsed.success) {
-        toast.success(`Parsed ${parsed.rows.length} rows: ${parsed.newCount} new, ${parsed.updatedCount} updated, ${parsed.skippedCount} unchanged`);
-      } else {
-        toast.error('Parsing failed — check errors below.');
-      }
+      const parsed = parseTransitionXlsx(buffer, file.name, existingRecords);
+      setPreview(parsed);
+      const total = parsed.newTransitions.length + parsed.updatedTransitions.length + parsed.skippedTransitions.length;
+      toast.success(`Parsed ${total} guided transitions: ${parsed.newTransitions.length} new, ${parsed.updatedTransitions.length} updated, ${parsed.skippedTransitions.length} unchanged`);
     } catch {
       toast.error('Failed to read file.');
     } finally {
       setParsing(false);
     }
   }, [existingRecords]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!preview) return;
+    setCommitting(true);
+    try {
+      const result = await confirmImport(preview);
+      if (result.success) {
+        toast.success(`Import complete: ${result.inserted} inserted, ${result.updated} updated`);
+        setCommitted(true);
+        // Refresh existing records
+        const updated = await fetchExistingRecords();
+        setExistingRecords(updated);
+      } else {
+        toast.error(`Import had errors: ${result.errors.join('; ')}`);
+      }
+    } catch (err) {
+      toast.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setCommitting(false);
+    }
+  }, [preview]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -54,27 +74,29 @@ export default function DataImport() {
     if (file) handleFile(file);
   }, [handleFile]);
 
-  const PREVIEW_COLS: { key: keyof HistoricalTransition; label: string; width: string }[] = [
-    { key: 'physician_name', label: 'Physician', width: 'min-w-[160px]' },
-    { key: 'opening_date', label: 'Open Date', width: 'min-w-[100px]' },
-    { key: 'guidance_number', label: 'Guidance', width: 'min-w-[80px]' },
-    { key: 'opening_balance', label: 'Opening Bal', width: 'min-w-[90px]' },
-    { key: 'pct_to_guidance', label: '% to Guide', width: 'min-w-[90px]' },
-    { key: 'hit_guidance', label: 'Hit?', width: 'min-w-[50px]' },
-    { key: 'segmentation', label: 'Segment', width: 'min-w-[100px]' },
-    { key: 'coc_type', label: 'COC', width: 'min-w-[70px]' },
-    { key: 'state', label: 'State', width: 'min-w-[50px]' },
-    { key: 'paid_members_current', label: 'Paid Mbrs', width: 'min-w-[80px]' },
-    { key: 'post_open_growth', label: 'Post-Open +/-', width: 'min-w-[100px]' },
+  const PREVIEW_COLS: { key: keyof ParsedTransition; label: string }[] = [
+    { key: 'physician_name', label: 'Physician' },
+    { key: 'opening_date', label: 'Open Date' },
+    { key: 'guidance_number', label: 'Guidance' },
+    { key: 'opening_balance', label: 'Opening Bal' },
+    { key: 'pct_to_guidance', label: '% to Guide' },
+    { key: 'hit_guidance', label: 'Hit?' },
+    { key: 'segmentation', label: 'Segment' },
+    { key: 'coc_type', label: 'COC' },
+    { key: 'state', label: 'State' },
+    { key: 'paid_members_current', label: 'Paid Mbrs' },
+    { key: 'post_open_growth', label: 'Post-Open +/-' },
   ];
 
-  const formatCell = (row: HistoricalTransition, key: keyof HistoricalTransition) => {
+  const formatCell = (row: ParsedTransition, key: keyof ParsedTransition) => {
     const val = row[key];
     if (val === null || val === undefined) return '—';
     if (key === 'pct_to_guidance' && typeof val === 'number') return `${(val * 100).toFixed(1)}%`;
     if (key === 'hit_guidance') return val ? '✓' : '✗';
     return String(val);
   };
+
+  const hasChanges = preview && (preview.newTransitions.length > 0 || preview.updatedTransitions.length > 0);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -93,17 +115,11 @@ export default function DataImport() {
           dragOver ? 'border-accent bg-accent/5' : 'border-border'
         }`}
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          onChange={onFileSelect}
-        />
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileSelect} />
         {parsing ? (
           <>
             <Loader2 className="h-10 w-10 text-accent animate-spin mb-4" />
-            <p className="text-sm text-foreground font-medium">Parsing {fileName}…</p>
+            <p className="text-sm text-foreground font-medium">Parsing…</p>
           </>
         ) : (
           <>
@@ -114,107 +130,171 @@ export default function DataImport() {
         )}
       </div>
 
-      {/* Errors */}
-      {result && result.errors.length > 0 && (
+      {/* Parse errors */}
+      {preview && preview.errors.length > 0 && (
         <div className="metric-card border-status-critical/30 bg-status-critical/5">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="h-4 w-4 text-status-critical" />
-            <h3 className="text-sm font-semibold text-foreground">Warnings / Errors</h3>
+            <h3 className="text-sm font-semibold text-foreground">Parse Errors ({preview.errors.length})</h3>
           </div>
-          <ul className="space-y-1 text-xs text-muted-foreground">
-            {result.errors.map((err, i) => (
-              <li key={i}>• {err}</li>
+          <ul className="space-y-1 text-xs text-muted-foreground max-h-32 overflow-y-auto">
+            {preview.errors.map((err, i) => (
+              <li key={i}>Row {err.row}: {err.physician_name ?? '(unknown)'} — {err.error}</li>
             ))}
           </ul>
         </div>
       )}
 
       {/* Summary stats */}
-      {result && result.success && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="metric-card text-center py-3">
-            <p className="text-2xl font-bold text-foreground">{result.rows.length}</p>
-            <p className="text-xs text-muted-foreground">Total Valid</p>
+      {preview && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="metric-card text-center py-3">
+              <p className="text-2xl font-bold text-foreground">{preview.guidedTransitions}</p>
+              <p className="text-xs text-muted-foreground">Guided</p>
+            </div>
+            <div className="metric-card text-center py-3">
+              <p className="text-2xl font-bold text-status-ahead">{preview.newTransitions.length}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> New
+              </p>
+            </div>
+            <div className="metric-card text-center py-3">
+              <p className="text-2xl font-bold text-accent">{preview.updatedTransitions.length}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <RefreshCw className="h-3 w-3" /> Updated
+              </p>
+            </div>
+            <div className="metric-card text-center py-3">
+              <p className="text-2xl font-bold text-muted-foreground">{preview.skippedTransitions.length}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <MinusCircle className="h-3 w-3" /> Unchanged
+              </p>
+            </div>
+            <div className="metric-card text-center py-3">
+              <p className="text-2xl font-bold text-muted-foreground">{preview.filteredRows}</p>
+              <p className="text-xs text-muted-foreground">Filtered Out</p>
+            </div>
           </div>
-          <div className="metric-card text-center py-3">
-            <p className="text-2xl font-bold text-status-ahead">{result.newCount}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <CheckCircle2 className="h-3 w-3" /> New
-            </p>
-          </div>
-          <div className="metric-card text-center py-3">
-            <p className="text-2xl font-bold text-accent">{result.updatedCount}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <RefreshCw className="h-3 w-3" /> Updated
-            </p>
-          </div>
-          <div className="metric-card text-center py-3">
-            <p className="text-2xl font-bold text-muted-foreground">{result.skippedCount}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <MinusCircle className="h-3 w-3" /> No Change
-            </p>
+
+          <div className="text-xs text-muted-foreground">
+            File: <span className="text-foreground">{preview.fileName}</span> · 
+            Sheet: <span className="text-foreground">{preview.sheetName ?? 'N/A'}</span> · 
+            Vintage: <span className="text-foreground">{new Date().toISOString().split('T')[0]}</span>
           </div>
         </div>
       )}
 
-      {/* Preview table */}
-      {result && result.success && result.rows.length > 0 && (
+      {/* Updated transitions detail */}
+      {preview && preview.updatedTransitions.length > 0 && (
         <div className="metric-card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground">
-              Import Preview — {result.rows.length} rows from "{result.sheetName}"
-            </h3>
-            <span className="text-xs text-muted-foreground">
-              {result.filteredRows > 0 && `${result.filteredRows} rows filtered out`}
-            </span>
-          </div>
+          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-accent" />
+            Updated Transitions ({preview.updatedTransitions.length})
+          </h3>
           <div className="overflow-x-auto -mx-4 px-4">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium min-w-[70px]">Action</th>
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Physician</th>
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Open Date</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Members</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Members</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Growth</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Growth</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.updatedTransitions.map((upd, i) => (
+                  <tr key={i} className="border-b border-border/50">
+                    <td className="py-1.5 pr-3 text-foreground">{upd.physician_name}</td>
+                    <td className="py-1.5 pr-3 text-foreground">{upd.opening_date ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_paid_members ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_paid_members ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_post_open_growth ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_post_open_growth ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* New transitions preview */}
+      {preview && preview.newTransitions.length > 0 && (
+        <div className="metric-card">
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            New Transitions ({preview.newTransitions.length})
+          </h3>
+          <div className="overflow-x-auto -mx-4 px-4">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
                   {PREVIEW_COLS.map((col) => (
-                    <th key={col.key} className={`text-left py-2 pr-3 text-muted-foreground font-medium ${col.width}`}>
+                    <th key={String(col.key)} className="text-left py-2 pr-3 text-muted-foreground font-medium whitespace-nowrap">
                       {col.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {result.rows.slice(0, 50).map((importRow, i) => {
-                  const style = ACTION_STYLES[importRow.action];
-                  return (
-                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                      <td className={`py-1.5 pr-3 font-medium ${style.cls}`}>{style.label}</td>
-                      {PREVIEW_COLS.map((col) => (
-                        <td key={col.key} className={`py-1.5 pr-3 text-foreground ${col.width}`}>
-                          <span className={
-                            col.key === 'hit_guidance'
-                              ? importRow.record.hit_guidance ? 'text-status-ahead' : 'text-status-critical'
-                              : col.key === 'post_open_growth' && typeof importRow.record.post_open_growth === 'number'
-                                ? importRow.record.post_open_growth > 0 ? 'text-status-ahead' : importRow.record.post_open_growth < 0 ? 'text-status-critical' : ''
-                                : ''
-                          }>
-                            {formatCell(importRow.record, col.key)}
-                          </span>
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
+                {preview.newTransitions.slice(0, 50).map((row, i) => (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                    {PREVIEW_COLS.map((col) => (
+                      <td key={String(col.key)} className="py-1.5 pr-3 text-foreground whitespace-nowrap">
+                        <span className={
+                          col.key === 'hit_guidance'
+                            ? row.hit_guidance ? 'text-status-ahead' : 'text-status-critical'
+                            : col.key === 'post_open_growth' && typeof row.post_open_growth === 'number'
+                              ? row.post_open_growth > 0 ? 'text-status-ahead' : row.post_open_growth < 0 ? 'text-status-critical' : ''
+                              : ''
+                        }>
+                          {formatCell(row, col.key)}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
-            {result.rows.length > 50 && (
+            {preview.newTransitions.length > 50 && (
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                Showing first 50 of {result.rows.length} rows
+                Showing first 50 of {preview.newTransitions.length} rows
               </p>
             )}
           </div>
         </div>
       )}
 
+      {/* Confirm button */}
+      {preview && hasChanges && !committed && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleConfirm}
+            disabled={committing}
+            className="flex items-center gap-2 px-6 py-2.5 bg-accent text-accent-foreground font-medium text-sm rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+          >
+            {committing ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Committing…</>
+            ) : (
+              <><Database className="h-4 w-4" /> Confirm Import ({preview.newTransitions.length} new, {preview.updatedTransitions.length} updated)</>
+            )}
+          </button>
+        </div>
+      )}
+
+      {committed && (
+        <div className="metric-card border-status-ahead/30 bg-status-ahead/5">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-status-ahead" />
+            <p className="text-sm font-medium text-foreground">Import committed successfully.</p>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!result && !parsing && (
+      {!preview && !parsing && (
         <div className="metric-card">
           <h3 className="text-sm font-semibold text-foreground mb-3">Import Preview</h3>
           <div className="text-center py-8 text-muted-foreground text-sm">
@@ -223,23 +303,6 @@ export default function DataImport() {
           </div>
         </div>
       )}
-
-      {/* Import history placeholder */}
-      <div className="metric-card">
-        <h3 className="text-sm font-semibold text-foreground mb-3">Import History</h3>
-        <div className="space-y-2">
-          <div className="flex items-center gap-3 text-sm py-2 border-b border-border">
-            <CheckCircle2 className="h-4 w-4 text-status-ahead shrink-0" />
-            <span className="text-foreground">FY2025_Q4_transitions.xlsx</span>
-            <span className="text-muted-foreground ml-auto text-xs">Jan 15, 2026</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm py-2">
-            <CheckCircle2 className="h-4 w-4 text-status-ahead shrink-0" />
-            <span className="text-foreground">FY2025_Q3_transitions.xlsx</span>
-            <span className="text-muted-foreground ml-auto text-xs">Oct 1, 2025</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

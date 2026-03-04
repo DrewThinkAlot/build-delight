@@ -14,7 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      data_imports: {
+        Row: {
+          error_count: number
+          file_name: string
+          id: string
+          import_date: string
+          new_count: number
+          sheet_name: string | null
+          skipped_count: number
+          total_rows: number
+          updated_count: number
+        }
+        Insert: {
+          error_count?: number
+          file_name: string
+          id?: string
+          import_date?: string
+          new_count?: number
+          sheet_name?: string | null
+          skipped_count?: number
+          total_rows?: number
+          updated_count?: number
+        }
+        Update: {
+          error_count?: number
+          file_name?: string
+          id?: string
+          import_date?: string
+          new_count?: number
+          sheet_name?: string | null
+          skipped_count?: number
+          total_rows?: number
+          updated_count?: number
+        }
+        Relationships: []
+      }
+      historical_transitions: {
+        Row: {
+          actual_yield: number | null
+          city: string | null
+          coc_type: string | null
+          created_at: string
+          data_vintage: string | null
+          expected_yield: number | null
+          fiscal_month: string | null
+          guidance_number: number | null
+          hit_guidance: boolean | null
+          id: string
+          import_date: string
+          msrp_at_open: number | null
+          opening_balance: number | null
+          opening_date: string | null
+          paid_members_current: number | null
+          pct_to_guidance: number | null
+          physician_id: string | null
+          physician_name: string
+          post_open_growth: number | null
+          post_survey_patients: number | null
+          pre_survey_over_55: number | null
+          pre_survey_patients: number | null
+          segmentation: string | null
+          source_file: string | null
+          state: string | null
+          total_weeks: number | null
+          updated_at: string
+          wtc_55_plus: number | null
+        }
+        Insert: {
+          actual_yield?: number | null
+          city?: string | null
+          coc_type?: string | null
+          created_at?: string
+          data_vintage?: string | null
+          expected_yield?: number | null
+          fiscal_month?: string | null
+          guidance_number?: number | null
+          hit_guidance?: boolean | null
+          id?: string
+          import_date?: string
+          msrp_at_open?: number | null
+          opening_balance?: number | null
+          opening_date?: string | null
+          paid_members_current?: number | null
+          pct_to_guidance?: number | null
+          physician_id?: string | null
+          physician_name: string
+          post_open_growth?: number | null
+          post_survey_patients?: number | null
+          pre_survey_over_55?: number | null
+          pre_survey_patients?: number | null
+          segmentation?: string | null
+          source_file?: string | null
+          state?: string | null
+          total_weeks?: number | null
+          updated_at?: string
+          wtc_55_plus?: number | null
+        }
+        Update: {
+          actual_yield?: number | null
+          city?: string | null
+          coc_type?: string | null
+          created_at?: string
+          data_vintage?: string | null
+          expected_yield?: number | null
+          fiscal_month?: string | null
+          guidance_number?: number | null
+          hit_guidance?: boolean | null
+          id?: string
+          import_date?: string
+          msrp_at_open?: number | null
+          opening_balance?: number | null
+          opening_date?: string | null
+          paid_members_current?: number | null
+          pct_to_guidance?: number | null
+          physician_id?: string | null
+          physician_name?: string
+          post_open_growth?: number | null
+          post_survey_patients?: number | null
+          pre_survey_over_55?: number | null
+          pre_survey_patients?: number | null
+          segmentation?: string | null
+          source_file?: string | null
+          state?: string | null
+          total_weeks?: number | null
+          updated_at?: string
+          wtc_55_plus?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
