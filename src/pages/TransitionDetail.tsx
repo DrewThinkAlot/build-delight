@@ -28,20 +28,18 @@ export default function TransitionDetail() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>(initialTab);
   const { getTransition, getUpdatesForTransition, getLogsForTransition, getAlertsForTransition, getLatestUpdate } = useTransitions();
 
-  const transition = getTransition(id!);
-  if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
-
-  const updates = getUpdatesForTransition(id!);
-  const logs = getLogsForTransition(id!);
-  const alerts = getAlertsForTransition(id!);
-  const latest = getLatestUpdate(id!);
-
-  // Risk scoring
+  // Risk scoring hooks (must be before early return)
   const [calibration, setCalibration] = useState<ActiveWeightsResult | null>(null);
   useEffect(() => { getActiveWeights().then(setCalibration); }, []);
 
+  const transition = getTransition(id!);
+  const updates = transition ? getUpdatesForTransition(id!) : [];
+  const logs = transition ? getLogsForTransition(id!) : [];
+  const alerts = transition ? getAlertsForTransition(id!) : [];
+  const latest = transition ? getLatestUpdate(id!) : undefined;
+
   const liveRisk: RiskScoreResult | null = useMemo(() => {
-    if (!calibration) return null;
+    if (!calibration || !transition) return null;
     const input = {
       coc_type: transition.coc_type || '',
       guidance_number: transition.guidance_number,
