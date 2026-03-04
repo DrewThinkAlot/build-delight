@@ -142,9 +142,9 @@ export function parseTransitionXlsx(
     if (!sheetName) {
       // Fallback: use first sheet
       sheetName = workbook.SheetNames[0] ?? null;
-      if (!sheetName) {
-        return { success: false, data: [], errors: ['No sheets found in workbook'], sheetName: null, totalRows: 0, skippedRows: 0 };
-      }
+    if (!sheetName) {
+      return { success: false, rows: [], errors: ['No sheets found in workbook'], sheetName: null, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+    }
       errors.push(`Sheet "FYTD Open Transitions" not found. Using "${sheetName}" instead.`);
     }
 
