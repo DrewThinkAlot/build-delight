@@ -560,6 +560,16 @@ export default function TransitionDetail() {
           )}
         </div>
       )}
+
+      {/* Snapshot Modal */}
+      {transition && (
+        <SnapshotModal
+          open={snapshotModalOpen}
+          onOpenChange={setSnapshotModalOpen}
+          transition={transition}
+          onSaved={refreshIntel}
+        />
+      )}
     </div>
   );
 }
