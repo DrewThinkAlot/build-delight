@@ -75,6 +75,8 @@ export default function TransitionDetail() {
     }, calibration.benchmarks);
   }, [transition, calibration]);
 
+  if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
+
   // Chart data
   const totalWeeks = transition.total_weeks || 20;
   const chartData = Array.from({ length: totalWeeks + 1 }, (_, i) => {
