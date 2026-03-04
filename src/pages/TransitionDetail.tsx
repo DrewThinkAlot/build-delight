@@ -36,6 +36,47 @@ export default function TransitionDetail() {
   const alerts = getAlertsForTransition(id!);
   const latest = getLatestUpdate(id!);
 
+  // Risk scoring
+  const [calibration, setCalibration] = useState<ActiveWeightsResult | null>(null);
+  useEffect(() => { getActiveWeights().then(setCalibration); }, []);
+
+  const liveRisk: RiskScoreResult | null = useMemo(() => {
+    if (!calibration) return null;
+    const input = {
+      coc_type: transition.coc_type || '',
+      guidance_number: transition.guidance_number,
+      msrp_at_open: transition.msrp_at_open ?? null,
+      total_weeks: transition.total_weeks ?? null,
+      state: transition.state || '',
+      physician_full_time: transition.physician_full_time,
+      physician_has_strong_patient_relationships: transition.physician_has_strong_patient_relationships,
+      physician_comfortable_discussing_fees: transition.physician_comfortable_discussing_fees,
+      physician_engagement_level: transition.physician_engagement_level || 'High',
+      partner_group_aligned: transition.partner_group_aligned,
+      medicaid_pct: transition.medicaid_pct ?? null,
+      medicare_dual_pct: transition.medicare_dual_pct ?? null,
+      pre_survey_patients: transition.pre_survey_patients ?? null,
+      pre_survey_over_55: transition.pre_survey_over_55 ?? null,
+      specialty: transition.specialty,
+    };
+    const result = calculateRiskScore(input, calibration.weights);
+    result.calibration_date = calibration.calibrationDate;
+    result.n_historical = calibration.nTransitions;
+    return result;
+  }, [transition, calibration]);
+
+  const comparisons: BenchmarkComparison[] = useMemo(() => {
+    if (!calibration) return [];
+    return getSimilarTransitions({
+      coc_type: transition.coc_type || '', guidance_number: transition.guidance_number,
+      msrp_at_open: null, total_weeks: null, state: transition.state || '',
+      physician_full_time: true, physician_has_strong_patient_relationships: true,
+      physician_comfortable_discussing_fees: true, physician_engagement_level: 'High',
+      partner_group_aligned: true, medicaid_pct: null, medicare_dual_pct: null,
+      pre_survey_patients: null, pre_survey_over_55: null, specialty: transition.specialty,
+    }, calibration.benchmarks);
+  }, [transition, calibration]);
+
   // Chart data
   const totalWeeks = transition.total_weeks || 20;
   const chartData = Array.from({ length: totalWeeks + 1 }, (_, i) => {
