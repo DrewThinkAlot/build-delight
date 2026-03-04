@@ -1,23 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTransitions } from '@/contexts/TransitionContext';
+import { useAddTransition } from '@/hooks/useTransitionData';
 import { getActiveWeights, calculateRiskScore, getSimilarTransitions, type ActiveWeightsResult, type RiskScoreResult, type BenchmarkComparison } from '@/lib/riskScorer';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { RiskScoreCard } from '@/components/shared/RiskScoreCard';
 import { cn } from '@/lib/utils';
-import { Transition } from '@/types/transition';
-
+import { totalWeeks } from '@/lib/enrollmentCurve';
+import { toast } from 'sonner';
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 
-function totalWeeks(start: string, end: string) {
-  if (!start || !end) return null;
-  return Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / (7 * 86400000));
-}
-
 export default function NewTransition() {
   const navigate = useNavigate();
-  const { addTransition } = useTransitions();
+  const addTransition = useAddTransition();
   const [showRisk, setShowRisk] = useState(false);
   const [finalResult, setFinalResult] = useState<RiskScoreResult | null>(null);
   const [calibration, setCalibration] = useState<ActiveWeightsResult | null>(null);
@@ -39,12 +34,10 @@ export default function NewTransition() {
 
   const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
 
-  // Load active weights on mount
   useEffect(() => {
     getActiveWeights().then(setCalibration);
   }, []);
 
-  // Live risk score
   const liveRisk: RiskScoreResult | null = useMemo(() => {
     if (!calibration) return null;
     const tw = totalWeeks(form.transition_start, form.opening_date);
@@ -71,7 +64,6 @@ export default function NewTransition() {
     return result;
   }, [form, calibration]);
 
-  // Live benchmark comparisons
   const comparisons: BenchmarkComparison[] = useMemo(() => {
     if (!calibration || !form.guidance_number) return [];
     return getSimilarTransitions({
@@ -85,51 +77,52 @@ export default function NewTransition() {
     }, calibration.benchmarks);
   }, [form.coc_type, form.guidance_number, form.state, form.specialty, calibration]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!liveRisk) return;
 
     const tw = totalWeeks(form.transition_start, form.opening_date) ?? 0;
-    const t: Transition = {
-      id: `t-${Date.now()}`,
-      physician_name: form.physician_name,
-      physician_id: form.physician_id,
-      transition_start: form.transition_start,
-      opening_date: form.opening_date,
-      guidance_number: Number(form.guidance_number) || 0,
-      be_best_practice: Number(form.be_best_practice) || undefined,
-      msrp_at_open: Number(form.msrp_at_open) || undefined,
-      pre_survey_patients: Number(form.pre_survey_patients) || undefined,
-      pre_survey_over_55: Number(form.pre_survey_over_55) || undefined,
-      post_survey_patients: Number(form.post_survey_patients) || undefined,
-      wtc_55_plus: Number(form.wtc_55_plus) || undefined,
-      segmentation: form.segmentation,
-      coc_type: form.coc_type,
-      specialty: form.specialty,
-      state: form.state,
-      city: form.city,
-      medicaid_pct: form.medicaid_pct ? Number(form.medicaid_pct) / 100 : undefined,
-      medicare_dual_pct: form.medicare_dual_pct ? Number(form.medicare_dual_pct) / 100 : undefined,
-      physician_engagement_level: form.physician_engagement_level,
-      physician_full_time: form.physician_full_time,
-      physician_has_strong_patient_relationships: form.physician_has_strong_patient_relationships,
-      physician_comfortable_discussing_fees: form.physician_comfortable_discussing_fees,
-      partner_group_aligned: form.partner_group_aligned,
-      assigned_pa: form.assigned_pa,
-      assigned_ptm: form.assigned_ptm,
-      status: 'active',
-      risk_score: liveRisk.score,
-      risk_tier: liveRisk.tier as Transition['risk_tier'],
-      total_weeks: tw,
-      current_paid_members: 0,
-    };
 
-    addTransition(t);
-    setFinalResult(liveRisk);
-    setShowRisk(true);
+    try {
+      await addTransition.mutateAsync({
+        physician_name: form.physician_name,
+        physician_id: form.physician_id || undefined,
+        transition_start: form.transition_start,
+        opening_date: form.opening_date,
+        guidance_number: Number(form.guidance_number) || 0,
+        be_best_practice: Number(form.be_best_practice) || undefined,
+        msrp_at_open: Number(form.msrp_at_open) || undefined,
+        pre_survey_patients: Number(form.pre_survey_patients) || undefined,
+        pre_survey_over_55: Number(form.pre_survey_over_55) || undefined,
+        post_survey_patients: Number(form.post_survey_patients) || undefined,
+        wtc_55_plus: Number(form.wtc_55_plus) || undefined,
+        segmentation: form.segmentation || undefined,
+        coc_type: form.coc_type,
+        specialty: form.specialty || undefined,
+        state: form.state || undefined,
+        city: form.city || undefined,
+        medicaid_pct: form.medicaid_pct ? Number(form.medicaid_pct) / 100 : undefined,
+        medicare_dual_pct: form.medicare_dual_pct ? Number(form.medicare_dual_pct) / 100 : undefined,
+        physician_engagement_level: form.physician_engagement_level,
+        physician_full_time: form.physician_full_time,
+        physician_has_strong_patient_relationships: form.physician_has_strong_patient_relationships,
+        physician_comfortable_discussing_fees: form.physician_comfortable_discussing_fees,
+        partner_group_aligned: form.partner_group_aligned,
+        assigned_pa: form.assigned_pa || undefined,
+        assigned_ptm: form.assigned_ptm || undefined,
+        status: 'active',
+        risk_score: liveRisk.score,
+        risk_tier: liveRisk.tier as any,
+        total_weeks: tw,
+        current_paid_members: 0,
+      } as any);
+      setFinalResult(liveRisk);
+      setShowRisk(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save transition');
+    }
   };
 
-  // ── Post-save risk summary screen ──
   if (showRisk && finalResult) {
     return (
       <div className="max-w-lg mx-auto space-y-6">
@@ -165,13 +158,11 @@ export default function NewTransition() {
   const inputClass = "w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
   const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
 
-
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-bold text-foreground mb-6">New Transition</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6">
-        {/* ── Main Form ── */}
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basics */}
           <section className="space-y-4">
@@ -276,17 +267,15 @@ export default function NewTransition() {
             </div>
           </section>
 
-          {/* Mobile risk panel (shown below form on small screens) */}
           <div className="lg:hidden">
             <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
           </div>
 
-          <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
-            Save & Calculate Risk
+          <button type="submit" disabled={addTransition.isPending} className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors disabled:opacity-50">
+            {addTransition.isPending ? 'Saving...' : 'Save & Calculate Risk'}
           </button>
         </form>
 
-        {/* ── Sticky sidebar risk panel (desktop) ── */}
         <div className="hidden lg:block">
           <div className="sticky top-6">
             <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
@@ -296,4 +285,3 @@ export default function NewTransition() {
     </div>
   );
 }
-

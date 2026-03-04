@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTransitions } from '@/contexts/TransitionContext';
+import { useTransition, useCoachingLogs, useAddCoachingLog } from '@/hooks/useTransitionData';
 import { StarRating } from '@/components/shared/StarRating';
-import { CoachingLog } from '@/types/transition';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { DetailSkeleton } from '@/components/shared/PageSkeleton';
 
 const moods = ['enthusiastic', 'engaged', 'neutral', 'frustrated', 'disengaged', 'cold_feet'] as const;
 const interactionTypes = [
@@ -17,12 +18,11 @@ const interactionTypes = [
 export default function CoachingLogForm() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTransition, getLogsForTransition, addCoachingLog } = useTransitions();
+  const { data: transition, isLoading: tLoading } = useTransition(id);
+  const { data: logs = [], isLoading: lLoading } = useCoachingLogs(id);
+  const addLog = useAddCoachingLog();
 
-  const transition = getTransition(id!);
-  const logs = getLogsForTransition(id!);
   const previousLog = logs[0];
-
   const [previousFollowedThrough, setPreviousFollowedThrough] = useState<boolean | undefined>(undefined);
 
   const [form, setForm] = useState({
@@ -39,31 +39,35 @@ export default function CoachingLogForm() {
     follow_up_notes: '',
   });
 
+  if (tLoading || lLoading) return <DetailSkeleton />;
   if (!transition) return <div className="text-muted-foreground text-center py-12">Transition not found</div>;
 
   const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
   const inputClass = "w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
   const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const log: CoachingLog = {
-      id: `cl-${Date.now()}`,
-      transition_id: id!,
-      log_date: form.log_date,
-      interaction_type: form.interaction_type,
-      duration_minutes: Number(form.duration_minutes) || undefined,
-      topics_covered: form.topics_covered || undefined,
-      commitments_made: form.commitments_made || undefined,
-      your_action_items: form.your_action_items || undefined,
-      physician_mood: form.physician_mood,
-      confidence_level: form.confidence_level,
-      follow_up_needed: form.follow_up_needed,
-      follow_up_date: form.follow_up_date || undefined,
-      follow_up_notes: form.follow_up_notes || undefined,
-    };
-    addCoachingLog(log);
-    navigate(`/transitions/${id}?tab=coaching`);
+    try {
+      await addLog.mutateAsync({
+        transition_id: id!,
+        log_date: form.log_date,
+        interaction_type: form.interaction_type,
+        duration_minutes: Number(form.duration_minutes) || undefined,
+        topics_covered: form.topics_covered || undefined,
+        commitments_made: form.commitments_made || undefined,
+        your_action_items: form.your_action_items || undefined,
+        physician_mood: form.physician_mood,
+        confidence_level: form.confidence_level,
+        follow_up_needed: form.follow_up_needed,
+        follow_up_date: form.follow_up_date || undefined,
+        follow_up_notes: form.follow_up_notes || undefined,
+      } as any);
+      toast.success('Coaching log saved');
+      navigate(`/transitions/${id}?tab=coaching`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save coaching log');
+    }
   };
 
   return (
@@ -147,8 +151,8 @@ export default function CoachingLogForm() {
           )}
         </div>
 
-        <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
-          Save Coaching Log
+        <button type="submit" disabled={addLog.isPending} className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors disabled:opacity-50">
+          {addLog.isPending ? 'Saving...' : 'Save Coaching Log'}
         </button>
       </form>
     </div>

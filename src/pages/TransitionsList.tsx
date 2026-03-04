@@ -1,11 +1,36 @@
 import { Link } from 'react-router-dom';
-import { useTransitions } from '@/contexts/TransitionContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Plus } from 'lucide-react';
+import { useTransitionsList } from '@/hooks/useTransitionData';
+import { ListSkeleton } from '@/components/shared/PageSkeleton';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { useWeeklyUpdates } from '@/hooks/useTransitionData';
 
 export default function TransitionsList() {
-  const { transitions, getLatestUpdate } = useTransitions();
+  const { data: transitions, isLoading } = useTransitionsList();
+
+  if (isLoading) return <ListSkeleton />;
+  if (!transitions?.length) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-foreground">All Transitions</h1>
+          <Link to="/transitions/new" className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors">
+            <Plus className="h-4 w-4" /> New Transition
+          </Link>
+        </div>
+        <EmptyState
+          title="No transitions yet"
+          description="Create your first transition to start tracking physician enrollment progress, or import historical data."
+          actionLabel="Create Transition"
+          actionTo="/transitions/new"
+          secondaryLabel="Import Data"
+          secondaryTo="/import"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -18,7 +43,6 @@ export default function TransitionsList() {
 
       <div className="space-y-3">
         {transitions.map(t => {
-          const latest = getLatestUpdate(t.id);
           const weeksLeft = t.opening_date ? Math.max(0, Math.ceil((new Date(t.opening_date).getTime() - Date.now()) / (7 * 86400000))) : 0;
           return (
             <Link key={t.id} to={`/transitions/${t.id}`} className="metric-card block hover:border-accent/40 transition-colors">
@@ -26,7 +50,7 @@ export default function TransitionsList() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-foreground">{t.physician_name}</span>
-                    <StatusBadge status={t.status === 'completed' ? 'AHEAD' : (latest?.pacing_status || t.risk_tier || 'LOW')} />
+                    <StatusBadge status={t.status === 'completed' ? 'AHEAD' : (t.risk_tier || 'LOW')} />
                     {t.status === 'completed' && <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Completed</span>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
