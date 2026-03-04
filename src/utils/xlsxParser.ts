@@ -25,13 +25,27 @@ export interface HistoricalTransition {
   post_open_growth: number | null;
 }
 
+export type ImportAction = 'new' | 'updated' | 'skipped';
+
+export interface ImportRow {
+  record: HistoricalTransition;
+  action: ImportAction;
+}
+
 export interface ParseResult {
   success: boolean;
-  data: HistoricalTransition[];
+  rows: ImportRow[];
   errors: string[];
   sheetName: string | null;
   totalRows: number;
-  skippedRows: number;
+  filteredRows: number;
+  newCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}
+
+function dedupKey(name: string, date: string | null): string {
+  return `${name.trim().toLowerCase()}|${(date ?? '').trim()}`;
 }
 
 // Column name mapping — keys are lowercased/trimmed spreadsheet headers
@@ -114,7 +128,10 @@ function deriveCocType(segmentation: string | null): string | null {
   return segmentation.toLowerCase().includes('coc in') ? 'COC In' : 'COC Out';
 }
 
-export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
+export function parseTransitionXlsx(
+  buffer: ArrayBuffer,
+  existingRecords: HistoricalTransition[] = []
+): ParseResult {
   const errors: string[] = [];
   let sheetName: string | null = null;
 
@@ -125,9 +142,9 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
     if (!sheetName) {
       // Fallback: use first sheet
       sheetName = workbook.SheetNames[0] ?? null;
-      if (!sheetName) {
-        return { success: false, data: [], errors: ['No sheets found in workbook'], sheetName: null, totalRows: 0, skippedRows: 0 };
-      }
+    if (!sheetName) {
+      return { success: false, rows: [], errors: ['No sheets found in workbook'], sheetName: null, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+    }
       errors.push(`Sheet "FYTD Open Transitions" not found. Using "${sheetName}" instead.`);
     }
 
@@ -160,16 +177,25 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
 
     if (!Object.values(colIndexMap).includes('physician_name')) {
       errors.push('Could not find "Account Name" column. Check file format.');
-      return { success: false, data: [], errors, sheetName, totalRows: 0, skippedRows: 0 };
+      return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
+    }
+
+    // Build lookup of existing records for dedup
+    const existingMap = new Map<string, HistoricalTransition>();
+    for (const rec of existingRecords) {
+      existingMap.set(dedupKey(rec.physician_name, rec.opening_date), rec);
     }
 
     const dataRows = jsonData.slice(headerRowIdx + 1) as unknown[][];
-    const results: HistoricalTransition[] = [];
-    let skippedRows = 0;
+    const results: ImportRow[] = [];
+    let filteredRows = 0;
+    let newCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
 
     for (const row of dataRows) {
       if (!row || row.every((c) => c === null || c === undefined || c === '')) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
 
@@ -212,15 +238,15 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
       // Filter rules
       const name = (record.physician_name ?? '').toLowerCase();
       if (!record.physician_name || name === 'totals' || name === 'averages') {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
       if (record.guidance_number == null || record.guidance_number <= 0) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
       if (record.opening_balance == null) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
 
@@ -235,19 +261,41 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
           ? record.paid_members_current - record.opening_balance
           : null;
 
-      results.push(record as HistoricalTransition);
+      const final = record as HistoricalTransition;
+
+      // Deduplication
+      const key = dedupKey(final.physician_name, final.opening_date);
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        const membersChanged = existing.paid_members_current !== final.paid_members_current;
+        const growthChanged = existing.post_open_growth !== final.post_open_growth;
+        if (membersChanged || growthChanged) {
+          results.push({ record: final, action: 'updated' });
+          updatedCount++;
+        } else {
+          results.push({ record: final, action: 'skipped' });
+          skippedCount++;
+        }
+      } else {
+        results.push({ record: final, action: 'new' });
+        newCount++;
+      }
     }
 
     return {
       success: true,
-      data: results,
+      rows: results,
       errors,
       sheetName,
       totalRows: dataRows.length,
-      skippedRows,
+      filteredRows,
+      newCount,
+      updatedCount,
+      skippedCount,
     };
   } catch (err) {
     errors.push(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
-    return { success: false, data: [], errors, sheetName, totalRows: 0, skippedRows: 0 };
+    return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
   }
 }
