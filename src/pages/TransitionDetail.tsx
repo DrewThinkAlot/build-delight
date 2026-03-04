@@ -14,6 +14,9 @@ import { useCoachingAI } from '@/hooks/useCoachingAI';
 import { CoachingFeature } from '@/lib/aiPrompts';
 import { getCachedContent } from '@/lib/aiCoachingService';
 import { toast } from 'sonner';
+import { useTransitionIntelligence } from '@/hooks/useWeeklySnapshots';
+import { WeeklyIntelligencePanel } from '@/components/weekly-intelligence/WeeklyIntelligencePanel';
+import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
 
 const tabs = ['Overview', 'Weekly Updates', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
 
