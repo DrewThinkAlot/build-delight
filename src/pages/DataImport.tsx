@@ -4,7 +4,7 @@ import { parseTransitionXlsx, ImportPreview, ParsedTransition } from '@/utils/xl
 import { parseSnapshotFile, SnapshotImportPreview } from '@/utils/snapshotParser';
 import { confirmImport, fetchExistingRecords } from '@/utils/importService';
 import { upsertSnapshot } from '@/hooks/useWeeklySnapshots';
-import { useTransitions } from '@/contexts/TransitionContext';
+import { useTransitionsList } from '@/hooks/useTransitionData';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
