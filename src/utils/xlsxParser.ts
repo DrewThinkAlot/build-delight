@@ -25,13 +25,27 @@ export interface HistoricalTransition {
   post_open_growth: number | null;
 }
 
+export type ImportAction = 'new' | 'updated' | 'skipped';
+
+export interface ImportRow {
+  record: HistoricalTransition;
+  action: ImportAction;
+}
+
 export interface ParseResult {
   success: boolean;
-  data: HistoricalTransition[];
+  rows: ImportRow[];
   errors: string[];
   sheetName: string | null;
   totalRows: number;
-  skippedRows: number;
+  filteredRows: number;
+  newCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}
+
+function dedupKey(name: string, date: string | null): string {
+  return `${name.trim().toLowerCase()}|${(date ?? '').trim()}`;
 }
 
 // Column name mapping — keys are lowercased/trimmed spreadsheet headers
