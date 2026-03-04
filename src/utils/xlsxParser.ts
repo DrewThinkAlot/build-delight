@@ -209,23 +209,26 @@ export function parseTransitionXlsx(
     const sheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as unknown[][];
 
-    // Find header row
+    // Find header row — look for a row containing a physician name alias
     let headerRowIdx = 8;
     for (let i = 0; i < Math.min(20, jsonData.length); i++) {
       const row = jsonData[i];
-      if (row && row.some(cell => String(cell ?? '').toLowerCase().includes('account name'))) {
+      if (row && row.some(cell => {
+        const s = String(cell ?? '').toLowerCase().trim();
+        return s.includes('account name') || s.includes('physician name') || s.includes('doctor name');
+      })) {
         headerRowIdx = i;
         break;
       }
     }
 
     const rawHeaders = jsonData[headerRowIdx] ?? [];
-    const headers = rawHeaders.map(h => String(h ?? '').trim().toLowerCase());
+    const headers = rawHeaders.map(h => String(h ?? '').trim());
 
-    // Build column index map
+    // Build column index map using fuzzy matching
     const colIndexMap: Record<number, string> = {};
     headers.forEach((header, idx) => {
-      const mapped = COLUMN_MAP[header];
+      const mapped = matchHeader(header);
       if (mapped) colIndexMap[idx] = mapped;
     });
 
