@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Weights, Benchmarks } from "./riskScorer";
+import type { Weights, Benchmarks, RiskScoreInput } from "./riskScorer";
+import { calculateRiskScore } from "./riskScorer";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
