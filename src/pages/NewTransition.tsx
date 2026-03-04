@@ -293,7 +293,7 @@ export default function NewTransition() {
         {/* ── Sticky sidebar risk panel (desktop) ── */}
         <div className="hidden lg:block">
           <div className="sticky top-6">
-            <RiskPanel liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} tierColor={tierColor} tierBg={tierBg} />
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
           </div>
         </div>
       </div>
