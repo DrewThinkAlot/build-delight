@@ -309,8 +309,6 @@ function generateBenchmarks(
     hit_rate_by_month,
   };
 }
-  return result;
-}
 
 // ── Main Recalibration ─────────────────────────────────────────────────
 
