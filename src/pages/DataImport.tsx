@@ -285,12 +285,12 @@ export default function DataImport() {
                   <tbody>
                     {preview.updatedTransitions.map((upd, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        <td className="py-1.5 pr-3 text-foreground">{upd.physician_name}</td>
-                        <td className="py-1.5 pr-3 text-foreground">{upd.opening_date ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-foreground truncate max-w-[120px]">{upd.physician_name}</td>
+                        <td className="py-1.5 pr-3 text-foreground hidden sm:table-cell">{upd.opening_date ?? '—'}</td>
                         <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_paid_members ?? '—'}</td>
                         <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_paid_members ?? '—'}</td>
-                        <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_post_open_growth ?? '—'}</td>
-                        <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_post_open_growth ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-right text-muted-foreground hidden sm:table-cell">{upd.old_post_open_growth ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-right text-accent font-medium hidden sm:table-cell">{upd.new_post_open_growth ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
