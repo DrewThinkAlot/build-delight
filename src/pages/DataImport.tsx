@@ -141,7 +141,7 @@ export default function DataImport() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`metric-card flex flex-col items-center justify-center py-16 border-2 border-dashed transition-colors cursor-pointer ${
+        className={`metric-card flex flex-col items-center justify-center py-10 sm:py-16 border-2 border-dashed transition-colors cursor-pointer ${
           dragOver ? 'border-accent bg-accent/5' : 'border-border'
         }`}
       >
