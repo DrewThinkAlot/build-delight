@@ -195,7 +195,7 @@ export function parseTransitionXlsx(
 
     for (const row of dataRows) {
       if (!row || row.every((c) => c === null || c === undefined || c === '')) {
-        skippedRows++;
+        filteredRows++;
         continue;
       }
 
