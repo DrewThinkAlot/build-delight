@@ -12,7 +12,8 @@ import { useCoachingAI } from '@/hooks/useCoachingAI';
 export default function WeeklyUpdateForm() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTransition, getUpdatesForTransition, addWeeklyUpdate } = useTransitions();
+  const { getTransition, getUpdatesForTransition, getLogsForTransition, addWeeklyUpdate } = useTransitions();
+  const { generateForTransition, isLoading: aiLoading, content: aiContent, error: aiError } = useCoachingAI();
 
   const transition = getTransition(id!);
   const updates = getUpdatesForTransition(id!);
