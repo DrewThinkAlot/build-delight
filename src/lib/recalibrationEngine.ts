@@ -664,8 +664,8 @@ export async function saveCalibration(result: RecalibrationResult, label?: strin
 
   // Insert the new calibration as active
   const { error } = await supabase.from("risk_weights").insert([{
-    weights: result.weights as unknown as Record<string, unknown>,
-    benchmarks: result.benchmarks as unknown as Record<string, unknown>,
+    weights: JSON.parse(JSON.stringify(result.weights)),
+    benchmarks: JSON.parse(JSON.stringify(result.benchmarks)),
     is_active: true,
     n_transitions: result.summary.n_transitions,
     n_hit: Math.round(result.summary.overall_hit_rate * result.summary.n_transitions),
