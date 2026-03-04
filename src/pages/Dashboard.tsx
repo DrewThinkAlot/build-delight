@@ -4,15 +4,31 @@ import { MetricCard } from '@/components/shared/MetricCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
-import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, Phone, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useAllTransitionsIntelligence } from '@/hooks/useWeeklySnapshots';
+import { worstSeverity } from '@/lib/weeklySignals';
+import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
+import { CoachPrepDrawer } from '@/components/weekly-intelligence/CoachPrepDrawer';
+import type { Transition } from '@/types/transition';
 
 export default function Dashboard() {
   const { transitions, getLatestUpdate, getAlertsForTransition, weeklyUpdates, coachingLogs } = useTransitions();
   const [showOnTrack, setShowOnTrack] = useState(false);
   const [recalBanner, setRecalBanner] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
+
+  // Snapshot modal state
+  const [snapshotTarget, setSnapshotTarget] = useState<Transition | null>(null);
+  // Coach prep drawer state
+  const [coachPrepTarget, setCoachPrepTarget] = useState<Transition | null>(null);
+
+  const active = transitions.filter(t => t.status === 'active');
+  const completed = transitions.filter(t => t.status === 'completed');
+
+  // Weekly intelligence for all active transitions
+  const { intelMap, refresh: refreshIntel } = useAllTransitionsIntelligence(active);
 
   useEffect(() => {
     (async () => {
@@ -29,34 +45,85 @@ export default function Dashboard() {
     })();
   }, []);
 
-  const active = transitions.filter(t => t.status === 'active');
-  const completed = transitions.filter(t => t.status === 'completed');
-
+  // Determine needs-attention using weekly signals when available, fallback to existing logic
   const needsAttention = active.filter(t => {
+    const intel = intelMap[t.id];
+    if (intel && intel.signals.length > 0) {
+      const sev = worstSeverity(intel.signals);
+      return sev === 'red' || sev === 'yellow';
+    }
+    // Fallback to existing logic
     const latest = getLatestUpdate(t.id);
     return latest?.pacing_status === 'BEHIND' || latest?.pacing_status === 'CRITICAL' ||
       t.risk_tier === 'HIGH' || t.risk_tier === 'CRITICAL';
-  }).sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+  }).sort((a, b) => {
+    const aIntel = intelMap[a.id];
+    const bIntel = intelMap[b.id];
+    const aSev = aIntel ? (worstSeverity(aIntel.signals) === 'red' ? 2 : 1) : 0;
+    const bSev = bIntel ? (worstSeverity(bIntel.signals) === 'red' ? 2 : 1) : 0;
+    if (bSev !== aSev) return bSev - aSev;
+    return (b.risk_score || 0) - (a.risk_score || 0);
+  });
 
   const onTrack = active.filter(t => !needsAttention.includes(t));
 
-  // Action items
-  const actionItems: { label: string; severity: string; transitionId: string; physicianName: string }[] = [];
+  // Action items: from recommendations for red/yellow transitions + legacy overdue checks
+  const actionItems: { label: string; severity: string; transitionId: string; physicianName: string; actionKey?: string }[] = [];
+
   active.forEach(t => {
-    const updates = weeklyUpdates.filter(u => u.transition_id === t.id);
-    const latestUpdate = updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : null;
-    if (latestUpdate) {
-      const daysSince = (Date.now() - new Date(latestUpdate.update_date).getTime()) / 86400000;
-      if (daysSince > 7) actionItems.push({ label: `Weekly update overdue (${Math.floor(daysSince)} days)`, severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
-    } else {
-      actionItems.push({ label: 'No weekly updates yet', severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
+    const intel = intelMap[t.id];
+
+    // From weekly intelligence recommendations
+    if (intel && intel.recommendations.length > 0) {
+      const completedKeys = new Set(intel.completions.map(c => c.action_key));
+      intel.recommendations
+        .filter(r => !completedKeys.has(r.key))
+        .slice(0, 2)
+        .forEach(r => {
+          const sev = worstSeverity(intel.signals);
+          actionItems.push({
+            label: r.title,
+            severity: sev === 'red' ? 'CRITICAL' : sev === 'yellow' ? 'HIGH' : 'MODERATE',
+            transitionId: t.id,
+            physicianName: t.physician_name,
+            actionKey: r.key,
+          });
+        });
     }
+
+    // Snapshot overdue check
+    if (intel && intel.snapshots.length > 0) {
+      const lastSnap = intel.snapshots[intel.snapshots.length - 1];
+      const daysSince = (Date.now() - new Date(lastSnap.week_ending_date).getTime()) / 86400000;
+      if (daysSince > 7) {
+        actionItems.push({
+          label: `Weekly snapshot overdue (${Math.floor(daysSince)} days)`,
+          severity: 'MODERATE',
+          transitionId: t.id,
+          physicianName: t.physician_name,
+        });
+      }
+    } else {
+      // Legacy: check weekly updates overdue
+      const updates = weeklyUpdates.filter(u => u.transition_id === t.id);
+      const latestUpdate = updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : null;
+      if (latestUpdate) {
+        const daysSince = (Date.now() - new Date(latestUpdate.update_date).getTime()) / 86400000;
+        if (daysSince > 7) actionItems.push({ label: `Weekly update overdue (${Math.floor(daysSince)} days)`, severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
+      } else {
+        actionItems.push({ label: 'No weekly updates yet', severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
+      }
+    }
+
+    // Legacy coaching check
     const logs = coachingLogs.filter(l => l.transition_id === t.id);
     const latestLog = logs.length ? logs.reduce((a, b) => new Date(a.log_date) > new Date(b.log_date) ? a : b) : null;
     if (latestLog) {
       const daysSince = (Date.now() - new Date(latestLog.log_date).getTime()) / 86400000;
       if (daysSince > 10) actionItems.push({ label: `No coaching interaction (${Math.floor(daysSince)} days)`, severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
     }
+
+    // Legacy alerts
     const alerts = getAlertsForTransition(t.id);
     alerts.forEach(a => actionItems.push({ label: a.message, severity: a.severity, transitionId: t.id, physicianName: t.physician_name }));
   });
@@ -78,8 +145,18 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="Active" value={active.length} icon={Users} accentColor="text-accent" />
         <MetricCard label="On Track" value={onTrack.length} icon={TrendingUp} accentColor="text-status-ahead" />
-        <MetricCard label="Behind" value={needsAttention.filter(t => { const u = getLatestUpdate(t.id); return u?.pacing_status === 'BEHIND'; }).length} icon={AlertTriangle} accentColor="text-status-behind" />
-        <MetricCard label="Critical" value={needsAttention.filter(t => { const u = getLatestUpdate(t.id); return u?.pacing_status === 'CRITICAL' || t.risk_tier === 'CRITICAL'; }).length} icon={AlertTriangle} accentColor="text-status-critical" />
+        <MetricCard label="Behind" value={needsAttention.filter(t => {
+          const intel = intelMap[t.id];
+          if (intel) return worstSeverity(intel.signals) === 'yellow';
+          const u = getLatestUpdate(t.id);
+          return u?.pacing_status === 'BEHIND';
+        }).length} icon={AlertTriangle} accentColor="text-status-behind" />
+        <MetricCard label="Critical" value={needsAttention.filter(t => {
+          const intel = intelMap[t.id];
+          if (intel) return worstSeverity(intel.signals) === 'red';
+          const u = getLatestUpdate(t.id);
+          return u?.pacing_status === 'CRITICAL' || t.risk_tier === 'CRITICAL';
+        }).length} icon={AlertTriangle} accentColor="text-status-critical" />
       </div>
 
       {/* Needs Attention */}
@@ -91,7 +168,10 @@ export default function Dashboard() {
           <div className="grid gap-3">
             {needsAttention.map(t => {
               const latest = getLatestUpdate(t.id);
+              const intel = intelMap[t.id];
               const weeksLeft = t.opening_date ? Math.max(0, Math.ceil((new Date(t.opening_date).getTime() - Date.now()) / (7 * 86400000))) : 0;
+              const topSignals = intel?.signals.filter(s => s.severity !== 'green').slice(0, 2) ?? [];
+
               return (
                 <Link key={t.id} to={`/transitions/${t.id}`} className="metric-card hover:border-accent/40 transition-colors group">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -100,19 +180,27 @@ export default function Dashboard() {
                         <span className="font-semibold text-foreground">{t.physician_name}</span>
                         <StatusBadge status={latest?.pacing_status || t.risk_tier || 'MODERATE'} />
                         <span className="text-xs text-muted-foreground">
-                          Week {latest?.week_number || '?'} of {t.total_weeks}
+                          {weeksLeft} weeks left
                         </span>
                       </div>
                       <div className="mt-2">
-                        <ProgressBar value={t.current_paid_members || 0} max={t.guidance_number} />
+                        <ProgressBar value={intel?.metrics?.pace_to_guidance ? Math.round(intel.metrics.pace_to_guidance * t.guidance_number) : (t.current_paid_members || 0)} max={t.guidance_number} />
                         <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                          <span className="font-mono">{t.current_paid_members || 0} / {t.guidance_number}</span>
-                          {latest?.members_per_week_needed && (
-                            <span>Need {latest.members_per_week_needed}/wk</span>
-                          )}
-                          <span>{weeksLeft} weeks left</span>
+                          <span className="font-mono">{intel?.snapshots?.length ? intel.snapshots[intel.snapshots.length - 1].paid_members : (t.current_paid_members || 0)} / {t.guidance_number}</span>
+                          {intel?.metrics && <span>Projected: {intel.metrics.projected_paid_at_opening}</span>}
+                          {!intel?.metrics && latest?.members_per_week_needed && <span>Need {latest.members_per_week_needed}/wk</span>}
                         </div>
                       </div>
+                      {/* Signal titles */}
+                      {topSignals.length > 0 && (
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {topSignals.map(s => (
+                            <span key={s.key} className={cn('text-[10px] px-1.5 py-0.5 rounded', s.severity === 'red' ? 'bg-status-critical/15 text-status-critical' : 'bg-status-behind/15 text-status-behind')}>
+                              {s.title}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-xs">
                       {t.risk_score !== undefined && (
@@ -136,12 +224,18 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex gap-2 mt-3">
-                    <Link to={`/transitions/${t.id}/update`} onClick={e => e.stopPropagation()} className="text-xs px-2.5 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium">
+                    <button
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setSnapshotTarget(t); }}
+                      className="text-xs px-2.5 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+                    >
                       Log Update
-                    </Link>
-                    <Link to={`/transitions/${t.id}?tab=coaching`} onClick={e => e.stopPropagation()} className="text-xs px-2.5 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium">
+                    </button>
+                    <button
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setCoachPrepTarget(t); }}
+                      className="text-xs px-2.5 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+                    >
                       Coach Prep
-                    </Link>
+                    </button>
                   </div>
                 </Link>
               );
@@ -157,7 +251,7 @@ export default function Dashboard() {
             <FileText className="h-4 w-4" /> Action Items This Week
           </h2>
           <div className="metric-card space-y-2">
-            {actionItems.slice(0, 8).map((item, i) => (
+            {actionItems.slice(0, 10).map((item, i) => (
               <Link key={i} to={`/transitions/${item.transitionId}`} className="flex items-start gap-2 py-1.5 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors">
                 <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0',
                   item.severity === 'CRITICAL' ? 'bg-status-critical' :
@@ -230,6 +324,27 @@ export default function Dashboard() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* Snapshot Modal */}
+      {snapshotTarget && (
+        <SnapshotModal
+          open={!!snapshotTarget}
+          onOpenChange={open => { if (!open) setSnapshotTarget(null); }}
+          transition={snapshotTarget}
+          onSaved={refreshIntel}
+        />
+      )}
+
+      {/* Coach Prep Drawer */}
+      {coachPrepTarget && intelMap[coachPrepTarget.id] && (
+        <CoachPrepDrawer
+          open={!!coachPrepTarget}
+          onOpenChange={open => { if (!open) setCoachPrepTarget(null); }}
+          transition={coachPrepTarget}
+          intel={intelMap[coachPrepTarget.id]}
+          onRefresh={refreshIntel}
+        />
       )}
     </div>
   );
