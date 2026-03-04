@@ -1,34 +1,42 @@
 import { Link } from 'react-router-dom';
-import { useTransitions } from '@/contexts/TransitionContext';
 import { MetricCard } from '@/components/shared/MetricCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
 import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTransitionsIntelligence } from '@/hooks/useWeeklySnapshots';
 import { worstSeverity } from '@/lib/weeklySignals';
 import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
 import { CoachPrepDrawer } from '@/components/weekly-intelligence/CoachPrepDrawer';
-import type { Transition } from '@/types/transition';
+import { useTransitionsList, useAllWeeklyUpdates, useAllCoachingLogs, useAlerts } from '@/hooks/useTransitionData';
+import { DashboardSkeleton } from '@/components/shared/PageSkeleton';
+import { EmptyState } from '@/components/shared/EmptyState';
+import type { Transition, WeeklyUpdate } from '@/types/transition';
 
 export default function Dashboard() {
-  const { transitions, getLatestUpdate, getAlertsForTransition, weeklyUpdates, coachingLogs } = useTransitions();
+  const { data: transitions = [], isLoading } = useTransitionsList();
+  const transitionIds = useMemo(() => transitions.map(t => t.id), [transitions]);
+  const { data: allUpdates = [] } = useAllWeeklyUpdates(transitionIds);
+  const { data: allLogs = [] } = useAllCoachingLogs(transitionIds);
+
   const [showOnTrack, setShowOnTrack] = useState(false);
   const [recalBanner, setRecalBanner] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
-
-  // Snapshot modal state
   const [snapshotTarget, setSnapshotTarget] = useState<Transition | null>(null);
-  // Coach prep drawer state
   const [coachPrepTarget, setCoachPrepTarget] = useState<Transition | null>(null);
 
   const active = transitions.filter(t => t.status === 'active');
   const completed = transitions.filter(t => t.status === 'completed');
 
-  // Weekly intelligence for all active transitions
   const { intelMap, refresh: refreshIntel } = useAllTransitionsIntelligence(active);
+
+  // Helper: get latest update for a transition
+  const getLatestUpdate = (id: string): WeeklyUpdate | undefined => {
+    const updates = allUpdates.filter(u => u.transition_id === id);
+    return updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : undefined;
+  };
 
   useEffect(() => {
     (async () => {
@@ -45,14 +53,12 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // Determine needs-attention using weekly signals when available, fallback to existing logic
   const needsAttention = active.filter(t => {
     const intel = intelMap[t.id];
     if (intel && intel.signals.length > 0) {
       const sev = worstSeverity(intel.signals);
       return sev === 'red' || sev === 'yellow';
     }
-    // Fallback to existing logic
     const latest = getLatestUpdate(t.id);
     return latest?.pacing_status === 'BEHIND' || latest?.pacing_status === 'CRITICAL' ||
       t.risk_tier === 'HIGH' || t.risk_tier === 'CRITICAL';
@@ -67,13 +73,10 @@ export default function Dashboard() {
 
   const onTrack = active.filter(t => !needsAttention.includes(t));
 
-  // Action items: from recommendations for red/yellow transitions + legacy overdue checks
   const actionItems: { label: string; severity: string; transitionId: string; physicianName: string; actionKey?: string }[] = [];
 
   active.forEach(t => {
     const intel = intelMap[t.id];
-
-    // From weekly intelligence recommendations
     if (intel && intel.recommendations.length > 0) {
       const completedKeys = new Set(intel.completions.map(c => c.action_key));
       intel.recommendations
@@ -91,7 +94,6 @@ export default function Dashboard() {
         });
     }
 
-    // Snapshot overdue check
     if (intel && intel.snapshots.length > 0) {
       const lastSnap = intel.snapshots[intel.snapshots.length - 1];
       const daysSince = (Date.now() - new Date(lastSnap.week_ending_date).getTime()) / 86400000;
@@ -104,8 +106,7 @@ export default function Dashboard() {
         });
       }
     } else {
-      // Legacy: check weekly updates overdue
-      const updates = weeklyUpdates.filter(u => u.transition_id === t.id);
+      const updates = allUpdates.filter(u => u.transition_id === t.id);
       const latestUpdate = updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : null;
       if (latestUpdate) {
         const daysSince = (Date.now() - new Date(latestUpdate.update_date).getTime()) / 86400000;
@@ -115,18 +116,34 @@ export default function Dashboard() {
       }
     }
 
-    // Legacy coaching check
-    const logs = coachingLogs.filter(l => l.transition_id === t.id);
+    const logs = allLogs.filter(l => l.transition_id === t.id);
     const latestLog = logs.length ? logs.reduce((a, b) => new Date(a.log_date) > new Date(b.log_date) ? a : b) : null;
     if (latestLog) {
       const daysSince = (Date.now() - new Date(latestLog.log_date).getTime()) / 86400000;
       if (daysSince > 10) actionItems.push({ label: `No coaching interaction (${Math.floor(daysSince)} days)`, severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
     }
-
-    // Legacy alerts
-    const alerts = getAlertsForTransition(t.id);
-    alerts.forEach(a => actionItems.push({ label: a.message, severity: a.severity, transitionId: t.id, physicianName: t.physician_name }));
   });
+
+  if (isLoading) return <DashboardSkeleton />;
+
+  if (transitions.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Portfolio Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Active transition overview</p>
+        </div>
+        <EmptyState
+          title="Welcome to TransitionIQ"
+          description="Start by creating your first physician transition or importing historical data from your tracker spreadsheet."
+          actionLabel="Create Transition"
+          actionTo="/transitions/new"
+          secondaryLabel="Import Data"
+          secondaryTo="/import"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -141,7 +158,6 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground mt-1">Active transition overview</p>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="Active" value={active.length} icon={Users} accentColor="text-accent" />
         <MetricCard label="On Track" value={onTrack.length} icon={TrendingUp} accentColor="text-status-ahead" />
@@ -159,7 +175,6 @@ export default function Dashboard() {
         }).length} icon={AlertTriangle} accentColor="text-status-critical" />
       </div>
 
-      {/* Needs Attention */}
       {needsAttention.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-status-critical uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -179,9 +194,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground">{t.physician_name}</span>
                         <StatusBadge status={latest?.pacing_status || t.risk_tier || 'MODERATE'} />
-                        <span className="text-xs text-muted-foreground">
-                          {weeksLeft} weeks left
-                        </span>
+                        <span className="text-xs text-muted-foreground">{weeksLeft} weeks left</span>
                       </div>
                       <div className="mt-2">
                         <ProgressBar value={intel?.metrics?.pace_to_guidance ? Math.round(intel.metrics.pace_to_guidance * t.guidance_number) : (t.current_paid_members || 0)} max={t.guidance_number} />
@@ -191,7 +204,6 @@ export default function Dashboard() {
                           {!intel?.metrics && latest?.members_per_week_needed && <span>Need {latest.members_per_week_needed}/wk</span>}
                         </div>
                       </div>
-                      {/* Signal titles */}
                       {topSignals.length > 0 && (
                         <div className="flex gap-2 mt-2 flex-wrap">
                           {topSignals.map(s => (
@@ -244,7 +256,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Action Items */}
       {actionItems.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -267,7 +278,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* On Track */}
       {onTrack.length > 0 && (
         <section>
           <button onClick={() => setShowOnTrack(!showOnTrack)} className="flex items-center gap-2 text-sm font-semibold text-status-ahead uppercase tracking-wider mb-3">
@@ -276,31 +286,27 @@ export default function Dashboard() {
           </button>
           {showOnTrack && (
             <div className="grid gap-3">
-              {onTrack.map(t => {
-                const latest = getLatestUpdate(t.id);
-                return (
-                  <Link key={t.id} to={`/transitions/${t.id}`} className="metric-card hover:border-accent/40 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{t.physician_name}</span>
-                          <StatusBadge status={latest?.pacing_status || 'ON_TRACK'} />
-                        </div>
-                        <ProgressBar value={t.current_paid_members || 0} max={t.guidance_number} className="mt-2" />
-                        <span className="text-xs text-muted-foreground font-mono mt-1 block">
-                          {t.current_paid_members || 0} / {t.guidance_number}
-                        </span>
+              {onTrack.map(t => (
+                <Link key={t.id} to={`/transitions/${t.id}`} className="metric-card hover:border-accent/40 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{t.physician_name}</span>
+                        <StatusBadge status="ON_TRACK" />
                       </div>
+                      <ProgressBar value={t.current_paid_members || 0} max={t.guidance_number} className="mt-2" />
+                      <span className="text-xs text-muted-foreground font-mono mt-1 block">
+                        {t.current_paid_members || 0} / {t.guidance_number}
+                      </span>
                     </div>
-                  </Link>
-                );
-              })}
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </section>
       )}
 
-      {/* Completed */}
       {completed.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -326,7 +332,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Snapshot Modal */}
       {snapshotTarget && (
         <SnapshotModal
           open={!!snapshotTarget}
@@ -336,7 +341,6 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Coach Prep Drawer */}
       {coachPrepTarget && intelMap[coachPrepTarget.id] && (
         <CoachPrepDrawer
           open={!!coachPrepTarget}

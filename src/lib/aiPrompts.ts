@@ -1,5 +1,5 @@
 import { Transition, WeeklyUpdate, CoachingLog } from '@/types/transition';
-import { getExpectedPct } from '@/data/sampleData';
+import { getExpectedPct } from '@/lib/enrollmentCurve';
 import { supabase } from '@/integrations/supabase/client';
 
 // ── Types ──────────────────────────────────────────────────────────────

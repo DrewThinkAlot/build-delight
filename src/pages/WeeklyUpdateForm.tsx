@@ -1,23 +1,24 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTransitions } from '@/contexts/TransitionContext';
+import { useTransition, useWeeklyUpdates, useCoachingLogs, useAddWeeklyUpdate } from '@/hooks/useTransitionData';
 import { StarRating } from '@/components/shared/StarRating';
-import { getExpectedPct } from '@/data/sampleData';
+import { getExpectedPct } from '@/lib/enrollmentCurve';
 import { WeeklyUpdate } from '@/types/transition';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { useCoachingAI } from '@/hooks/useCoachingAI';
+import { DetailSkeleton } from '@/components/shared/PageSkeleton';
 
 export default function WeeklyUpdateForm() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTransition, getUpdatesForTransition, getLogsForTransition, addWeeklyUpdate } = useTransitions();
+  const { data: transition, isLoading: tLoading } = useTransition(id);
+  const { data: updates = [], isLoading: uLoading } = useWeeklyUpdates(id);
+  const { data: logs = [] } = useCoachingLogs(id);
+  const addUpdate = useAddWeeklyUpdate();
   const { generateForTransition, isLoading: aiLoading, content: aiContent, error: aiError } = useCoachingAI();
 
-  const transition = getTransition(id!);
-  const updates = getUpdatesForTransition(id!);
-  const logs = getLogsForTransition(id!);
   const lastUpdate = updates[0];
   const [saved, setSaved] = useState(false);
   const [savedUpdate, setSavedUpdate] = useState<WeeklyUpdate | null>(null);
@@ -47,6 +48,7 @@ export default function WeeklyUpdateForm() {
     physician_coaching_call_completed: false,
   });
 
+  if (tLoading || uLoading) return <DetailSkeleton />;
   if (!transition) return <div className="text-muted-foreground text-center py-12">Transition not found</div>;
 
   const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
@@ -54,7 +56,7 @@ export default function WeeklyUpdateForm() {
   const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
   const nextWeek = (lastUpdate?.week_number || 0) + 1;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const members = Number(form.current_paid_members);
     const totalW = transition.total_weeks || 20;
@@ -65,45 +67,46 @@ export default function WeeklyUpdateForm() {
     const pacingStatus = pacingRatio >= 1.0 ? 'AHEAD' : pacingRatio >= 0.85 ? 'ON_TRACK' : pacingRatio >= 0.65 ? 'BEHIND' : 'CRITICAL';
     const weeksLeft = Math.max(1, totalW - nextWeek);
 
-    const update: WeeklyUpdate = {
-      id: `wu-${Date.now()}`,
-      transition_id: id!,
-      week_number: nextWeek,
-      update_date: new Date().toISOString().slice(0, 10),
-      current_paid_members: members,
-      net_change_from_last_week: lastUpdate ? members - lastUpdate.current_paid_members : members,
-      survey_prospects_left_pct: form.survey_prospects_left_pct / 100,
-      wtc_remaining: Number(form.wtc_remaining) || undefined,
-      expected_members_at_this_point: expectedMembers,
-      pacing_status: pacingStatus as WeeklyUpdate['pacing_status'],
-      pct_to_guidance: members / transition.guidance_number,
-      projected_opening_number: Math.round(members / expectedPct),
-      members_per_week_needed: Math.round((transition.guidance_number - members) / weeksLeft),
-      pa_effectiveness_rating: form.pa_effectiveness_rating,
-      physician_engagement_rating: form.physician_engagement_rating,
-      staff_engagement_rating: form.staff_engagement_rating,
-      physician_making_personal_calls: form.physician_making_personal_calls,
-      forums_scheduled: form.forums_scheduled,
-      forums_held: form.forums_held,
-      forum_attendance: Number(form.forum_attendance) || undefined,
-      pa_swap_considered: form.pa_swap_considered,
-      pa_swap_executed: form.pa_swap_executed,
-      strategy_change_made: form.strategy_change_made,
-      strategy_change_description: form.strategy_change_description || undefined,
-      notes: form.notes || undefined,
-      primary_obstacle: form.primary_obstacle || undefined,
-      obstacle_category: form.obstacle_category || undefined,
-      what_worked_this_week: form.what_worked_this_week || undefined,
-      what_didnt_work: form.what_didnt_work || undefined,
-      leadership_update_sent: form.leadership_update_sent,
-      ptm_sync_completed: form.ptm_sync_completed,
-      physician_coaching_call_completed: form.physician_coaching_call_completed,
-    };
-
-    addWeeklyUpdate(update);
-    setSavedUpdate(update);
-    setSaved(true);
-    toast.success('Weekly update saved');
+    try {
+      const result = await addUpdate.mutateAsync({
+        transition_id: id!,
+        week_number: nextWeek,
+        update_date: new Date().toISOString().slice(0, 10),
+        current_paid_members: members,
+        net_change_from_last_week: lastUpdate ? members - lastUpdate.current_paid_members : members,
+        survey_prospects_left_pct: form.survey_prospects_left_pct / 100,
+        wtc_remaining: Number(form.wtc_remaining) || undefined,
+        expected_members_at_this_point: expectedMembers,
+        pacing_status: pacingStatus as WeeklyUpdate['pacing_status'],
+        pct_to_guidance: members / transition.guidance_number,
+        projected_opening_number: Math.round(members / expectedPct),
+        members_per_week_needed: Math.round((transition.guidance_number - members) / weeksLeft),
+        pa_effectiveness_rating: form.pa_effectiveness_rating,
+        physician_engagement_rating: form.physician_engagement_rating,
+        staff_engagement_rating: form.staff_engagement_rating,
+        physician_making_personal_calls: form.physician_making_personal_calls,
+        forums_scheduled: form.forums_scheduled,
+        forums_held: form.forums_held,
+        forum_attendance: Number(form.forum_attendance) || undefined,
+        pa_swap_considered: form.pa_swap_considered,
+        pa_swap_executed: form.pa_swap_executed,
+        strategy_change_made: form.strategy_change_made,
+        strategy_change_description: form.strategy_change_description || undefined,
+        notes: form.notes || undefined,
+        primary_obstacle: form.primary_obstacle || undefined,
+        obstacle_category: form.obstacle_category || undefined,
+        what_worked_this_week: form.what_worked_this_week || undefined,
+        what_didnt_work: form.what_didnt_work || undefined,
+        leadership_update_sent: form.leadership_update_sent,
+        ptm_sync_completed: form.ptm_sync_completed,
+        physician_coaching_call_completed: form.physician_coaching_call_completed,
+      } as any);
+      setSavedUpdate(result);
+      setSaved(true);
+      toast.success('Weekly update saved');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save update');
+    }
   };
 
   const handleGenerateAI = async () => {
@@ -113,9 +116,7 @@ export default function WeeklyUpdateForm() {
     navigate(`/transitions/${id}?tab=coaching`);
   };
 
-  const handleSkip = () => {
-    navigate(`/transitions/${id}`);
-  };
+  const handleSkip = () => navigate(`/transitions/${id}`);
 
   const Toggle = ({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) => (
     <label className="flex items-center gap-3 cursor-pointer">
@@ -201,8 +202,8 @@ export default function WeeklyUpdateForm() {
         </section>
 
         {!saved ? (
-          <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
-            Save Weekly Update
+          <button type="submit" disabled={addUpdate.isPending} className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors disabled:opacity-50">
+            {addUpdate.isPending ? 'Saving...' : 'Save Weekly Update'}
           </button>
         ) : (
           <div className="rounded-lg border border-accent/30 bg-accent/5 p-5 space-y-4">
@@ -210,7 +211,7 @@ export default function WeeklyUpdateForm() {
               <CheckCircle2 className="h-5 w-5" />
               <span className="font-semibold">Weekly update saved</span>
             </div>
-            <p className="text-sm text-muted-foreground">Generate AI situation analysis? The AI will analyze your update and provide priorities, coaching guidance, and escalation recommendations.</p>
+            <p className="text-sm text-muted-foreground">Generate AI situation analysis?</p>
             {aiLoading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin text-accent" />
