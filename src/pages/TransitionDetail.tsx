@@ -317,6 +317,10 @@ export default function TransitionDetail() {
     }, calibration.benchmarks);
   }, [transition, calibration]);
 
+  // Weekly Intelligence
+  const { intel, loading: intelLoading, refresh: refreshIntel } = useTransitionIntelligence(transition);
+  const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+
   if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
 
   // Chart data
