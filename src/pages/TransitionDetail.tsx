@@ -104,14 +104,14 @@ function AICoachingSection({ section, transition, updates, logs, latest }: {
 
   return (
     <div className={cn('rounded-lg border p-4 space-y-3', section.bgClass)}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-accent" /> {section.title}
           </h3>
           <p className="text-xs text-muted-foreground">{section.desc}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {hasGenerated && content && !isLoading && (
             <>
               <button onClick={() => handleCopy(false)} className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Copy">
