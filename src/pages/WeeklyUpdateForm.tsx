@@ -154,7 +154,7 @@ export default function WeeklyUpdateForm() {
 
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-accent uppercase tracking-wider">Team Ratings</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><label className={labelClass}>PA Effectiveness</label><StarRating value={form.pa_effectiveness_rating} onChange={v => set('pa_effectiveness_rating', v)} size="md" /></div>
             <div><label className={labelClass}>Physician Engagement</label><StarRating value={form.physician_engagement_rating} onChange={v => set('physician_engagement_rating', v)} size="md" /></div>
             <div><label className={labelClass}>Staff Engagement</label><StarRating value={form.staff_engagement_rating} onChange={v => set('staff_engagement_rating', v)} size="md" /></div>
