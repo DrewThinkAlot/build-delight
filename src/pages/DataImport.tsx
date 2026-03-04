@@ -339,11 +339,11 @@ export default function DataImport() {
 
           {/* Action buttons */}
           {!committed && (
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <button
                 onClick={handleCancel}
                 disabled={committing}
-                className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded transition-colors disabled:opacity-50"
+                className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
               >
                 Cancel
               </button>
@@ -351,12 +351,12 @@ export default function DataImport() {
                 <button
                   onClick={handleConfirm}
                   disabled={committing}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-accent text-accent-foreground font-medium text-sm rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-accent-foreground font-medium text-sm rounded hover:bg-accent/90 transition-colors disabled:opacity-50 w-full sm:w-auto"
                 >
                   {committing ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Committing…</>
+                    <><Loader2 className="h-4 w-4 animate-spin" /> <span>Committing…</span></>
                   ) : (
-                    <><Database className="h-4 w-4" /> Confirm Import ({preview.newTransitions.length} new, {preview.updatedTransitions.length} updated)</>
+                    <><Database className="h-4 w-4 shrink-0" /> <span className="truncate">Confirm ({preview.newTransitions.length} new, {preview.updatedTransitions.length} updated)</span></>
                   )}
                 </button>
               )}
