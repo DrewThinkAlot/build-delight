@@ -282,7 +282,7 @@ export default function NewTransition() {
 
           {/* Mobile risk panel (shown below form on small screens) */}
           <div className="lg:hidden">
-            <RiskPanel liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} tierColor={tierColor} tierBg={tierBg} />
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
           </div>
 
           <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
