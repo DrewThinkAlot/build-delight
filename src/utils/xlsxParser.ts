@@ -296,6 +296,6 @@ export function parseTransitionXlsx(
     };
   } catch (err) {
     errors.push(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
-    return { success: false, data: [], errors, sheetName, totalRows: 0, skippedRows: 0 };
+    return { success: false, rows: [], errors, sheetName, totalRows: 0, filteredRows: 0, newCount: 0, updatedCount: 0, skippedCount: 0 };
   }
 }

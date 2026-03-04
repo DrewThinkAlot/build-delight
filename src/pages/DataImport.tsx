@@ -1,13 +1,21 @@
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, RefreshCw, MinusCircle } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
-import { parseTransitionXlsx, ParseResult, HistoricalTransition } from '@/utils/xlsxParser';
+import { parseTransitionXlsx, ParseResult, HistoricalTransition, ImportAction } from '@/utils/xlsxParser';
 import { toast } from 'sonner';
+
+const ACTION_STYLES: Record<ImportAction, { label: string; cls: string }> = {
+  new: { label: 'New', cls: 'text-status-ahead' },
+  updated: { label: 'Updated', cls: 'text-accent' },
+  skipped: { label: 'No change', cls: 'text-muted-foreground' },
+};
 
 export default function DataImport() {
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  // Simulated existing records for dedup (will come from DB later)
+  const [existingRecords] = useState<HistoricalTransition[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -20,10 +28,10 @@ export default function DataImport() {
     setResult(null);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseTransitionXlsx(buffer);
+      const parsed = parseTransitionXlsx(buffer, existingRecords);
       setResult(parsed);
       if (parsed.success) {
-        toast.success(`Parsed ${parsed.data.length} rows from "${parsed.sheetName}"`);
+        toast.success(`Parsed ${parsed.rows.length} rows: ${parsed.newCount} new, ${parsed.updatedCount} updated, ${parsed.skippedCount} unchanged`);
       } else {
         toast.error('Parsing failed — check errors below.');
       }
@@ -32,7 +40,7 @@ export default function DataImport() {
     } finally {
       setParsing(false);
     }
-  }, []);
+  }, [existingRecords]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -121,21 +129,50 @@ export default function DataImport() {
         </div>
       )}
 
+      {/* Summary stats */}
+      {result && result.success && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="metric-card text-center py-3">
+            <p className="text-2xl font-bold text-foreground">{result.rows.length}</p>
+            <p className="text-xs text-muted-foreground">Total Valid</p>
+          </div>
+          <div className="metric-card text-center py-3">
+            <p className="text-2xl font-bold text-status-ahead">{result.newCount}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> New
+            </p>
+          </div>
+          <div className="metric-card text-center py-3">
+            <p className="text-2xl font-bold text-accent">{result.updatedCount}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+              <RefreshCw className="h-3 w-3" /> Updated
+            </p>
+          </div>
+          <div className="metric-card text-center py-3">
+            <p className="text-2xl font-bold text-muted-foreground">{result.skippedCount}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+              <MinusCircle className="h-3 w-3" /> No Change
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Preview table */}
-      {result && result.success && result.data.length > 0 && (
+      {result && result.success && result.rows.length > 0 && (
         <div className="metric-card">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">
-              Import Preview — {result.data.length} rows from "{result.sheetName}"
+              Import Preview — {result.rows.length} rows from "{result.sheetName}"
             </h3>
             <span className="text-xs text-muted-foreground">
-              {result.skippedRows > 0 && `${result.skippedRows} empty rows skipped`}
+              {result.filteredRows > 0 && `${result.filteredRows} rows filtered out`}
             </span>
           </div>
           <div className="overflow-x-auto -mx-4 px-4">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium min-w-[70px]">Action</th>
                   {PREVIEW_COLS.map((col) => (
                     <th key={col.key} className={`text-left py-2 pr-3 text-muted-foreground font-medium ${col.width}`}>
                       {col.label}
@@ -144,28 +181,32 @@ export default function DataImport() {
                 </tr>
               </thead>
               <tbody>
-                {result.data.slice(0, 50).map((row, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                    {PREVIEW_COLS.map((col) => (
-                      <td key={col.key} className={`py-1.5 pr-3 text-foreground ${col.width}`}>
-                        <span className={
-                          col.key === 'hit_guidance'
-                            ? row.hit_guidance ? 'text-status-ahead' : 'text-status-critical'
-                            : col.key === 'post_open_growth' && typeof row.post_open_growth === 'number'
-                              ? row.post_open_growth > 0 ? 'text-status-ahead' : row.post_open_growth < 0 ? 'text-status-critical' : ''
-                              : ''
-                        }>
-                          {formatCell(row, col.key)}
-                        </span>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {result.rows.slice(0, 50).map((importRow, i) => {
+                  const style = ACTION_STYLES[importRow.action];
+                  return (
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className={`py-1.5 pr-3 font-medium ${style.cls}`}>{style.label}</td>
+                      {PREVIEW_COLS.map((col) => (
+                        <td key={col.key} className={`py-1.5 pr-3 text-foreground ${col.width}`}>
+                          <span className={
+                            col.key === 'hit_guidance'
+                              ? importRow.record.hit_guidance ? 'text-status-ahead' : 'text-status-critical'
+                              : col.key === 'post_open_growth' && typeof importRow.record.post_open_growth === 'number'
+                                ? importRow.record.post_open_growth > 0 ? 'text-status-ahead' : importRow.record.post_open_growth < 0 ? 'text-status-critical' : ''
+                                : ''
+                          }>
+                            {formatCell(importRow.record, col.key)}
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            {result.data.length > 50 && (
+            {result.rows.length > 50 && (
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                Showing first 50 of {result.data.length} rows
+                Showing first 50 of {result.rows.length} rows
               </p>
             )}
           </div>
