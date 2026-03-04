@@ -101,6 +101,19 @@ export default function WeeklyUpdateForm() {
     };
 
     addWeeklyUpdate(update);
+    setSavedUpdate(update);
+    setSaved(true);
+    toast.success('Weekly update saved');
+  };
+
+  const handleGenerateAI = async () => {
+    if (!transition || !savedUpdate) return;
+    const allUpdates = [savedUpdate, ...updates];
+    await generateForTransition(transition, allUpdates, logs, 'weekly_analysis', true);
+    navigate(`/transitions/${id}?tab=coaching`);
+  };
+
+  const handleSkip = () => {
     navigate(`/transitions/${id}`);
   };
 
