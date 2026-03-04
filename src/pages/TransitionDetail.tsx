@@ -278,34 +278,7 @@ export default function TransitionDetail() {
       )}
 
       {activeTab === 'AI Coaching' && (
-        <div className="space-y-4">
-          {[
-            { title: 'Weekly Situation Analysis', desc: 'Assessment & recommended actions', field: 'ai_situation_assessment' },
-            { title: 'Physician Coaching Prep', desc: 'Coaching plan for your next interaction', field: 'ai_physician_coaching_plan' },
-            ...(latest?.pacing_status === 'BEHIND' || latest?.pacing_status === 'CRITICAL'
-              ? [{ title: 'Recovery Plan', desc: 'Structured recovery strategy', field: 'recovery' }]
-              : []),
-            { title: 'Leadership Update', desc: 'Talking points for leadership', field: 'ai_leadership_talking_points' },
-          ].map(section => (
-            <div key={section.title} className="metric-card">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-foreground flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-accent" /> {section.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{section.desc}</p>
-                </div>
-                <button className="px-3 py-1.5 rounded bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors">
-                  Generate
-                </button>
-              </div>
-              <textarea
-                className="w-full min-h-[120px] bg-muted/50 border border-border rounded-md p-3 text-sm text-foreground placeholder:text-muted-foreground resize-y"
-                placeholder="AI-generated content will appear here. You can also paste content manually."
-              />
-            </div>
-          ))}
-        </div>
+        <AICoachingTab transition={transition} updates={updates} logs={logs} latest={latest} />
       )}
 
       {activeTab === 'Alerts' && (
