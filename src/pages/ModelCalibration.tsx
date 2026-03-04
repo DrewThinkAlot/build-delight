@@ -279,11 +279,11 @@ export default function ModelCalibration() {
         ) : (
           <div className="space-y-2 text-sm">
             {history.map(row => (
-              <div key={row.id} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+              <div key={row.id} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 py-2 border-b border-border last:border-0">
                 <span className="font-mono text-foreground">{fmtDate(row.calibration_date)}</span>
                 <span className="text-muted-foreground truncate max-w-[200px]">{row.calibration_label || '—'}</span>
                 <span className="text-muted-foreground">{row.n_transitions} trans • {fmtPct(row.overall_hit_rate)}</span>
-                {row.is_active && <span className="ml-auto status-badge status-ahead">Active</span>}
+                {row.is_active && <span className="sm:ml-auto status-badge status-ahead">Active</span>}
               </div>
             ))}
           </div>
