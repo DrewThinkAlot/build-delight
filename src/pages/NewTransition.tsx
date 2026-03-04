@@ -165,10 +165,6 @@ export default function NewTransition() {
   const inputClass = "w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
   const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const tierColor = !liveRisk ? 'border-border' :
-    liveRisk.tier === 'CRITICAL' ? 'border-status-critical' :
-    liveRisk.tier === 'HIGH' ? 'border-status-behind' :
-    liveRisk.tier === 'MODERATE' ? 'border-status-on-track' : 'border-status-ahead';
 
   return (
     <div className="max-w-2xl mx-auto">
