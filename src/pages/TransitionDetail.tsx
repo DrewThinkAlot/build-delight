@@ -14,6 +14,9 @@ import { useCoachingAI } from '@/hooks/useCoachingAI';
 import { CoachingFeature } from '@/lib/aiPrompts';
 import { getCachedContent } from '@/lib/aiCoachingService';
 import { toast } from 'sonner';
+import { useTransitionIntelligence } from '@/hooks/useWeeklySnapshots';
+import { WeeklyIntelligencePanel } from '@/components/weekly-intelligence/WeeklyIntelligencePanel';
+import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
 
 const tabs = ['Overview', 'Weekly Updates', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
 
@@ -314,6 +317,10 @@ export default function TransitionDetail() {
     }, calibration.benchmarks);
   }, [transition, calibration]);
 
+  // Weekly Intelligence
+  const { intel, loading: intelLoading, refresh: refreshIntel } = useTransitionIntelligence(transition);
+  const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+
   if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
 
   // Chart data
@@ -368,9 +375,23 @@ export default function TransitionDetail() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         <div className="space-y-6">
+          {/* Weekly Intelligence - ABOVE existing content */}
+          {intel && (
+            <WeeklyIntelligencePanel
+              transition={transition}
+              intel={intel}
+              onRefresh={refreshIntel}
+              onOpenSnapshot={() => setSnapshotModalOpen(true)}
+            />
+          )}
+
+          {/* Static Intake Risk + Progress */}
           <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
-            {/* Risk score card */}
-            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
+            {/* Risk score card - labeled as Static Intake Risk */}
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Static Intake Risk</p>
+              <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
+            </div>
 
             <div className="space-y-4">
               {/* Pacing */}
@@ -538,6 +559,16 @@ export default function TransitionDetail() {
             ))
           )}
         </div>
+      )}
+
+      {/* Snapshot Modal */}
+      {transition && (
+        <SnapshotModal
+          open={snapshotModalOpen}
+          onOpenChange={setSnapshotModalOpen}
+          transition={transition}
+          onSaved={refreshIntel}
+        />
       )}
     </div>
   );

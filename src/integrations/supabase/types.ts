@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_completions: {
+        Row: {
+          action_key: string
+          completed_at: string | null
+          id: string
+          transition_id: string
+          week_ending_date: string
+        }
+        Insert: {
+          action_key: string
+          completed_at?: string | null
+          id?: string
+          transition_id: string
+          week_ending_date: string
+        }
+        Update: {
+          action_key?: string
+          completed_at?: string | null
+          id?: string
+          transition_id?: string
+          week_ending_date?: string
+        }
+        Relationships: []
+      }
       data_imports: {
         Row: {
           error_count: number
@@ -182,6 +206,81 @@ export type Database = {
           n_transitions?: number
           overall_hit_rate?: number | null
           weights?: Json
+        }
+        Relationships: []
+      }
+      weekly_snapshots: {
+        Row: {
+          created_at: string | null
+          doctor_calls_last_week: number | null
+          guidance_number: number
+          id: string
+          notes: string | null
+          paid_members: number
+          strategic_activities: string | null
+          strategy_changed: boolean | null
+          touches_mer_last_week: number | null
+          touches_pa_last_week: number | null
+          transition_id: string
+          updated_at: string | null
+          week_ending_date: string
+          weekly_needed_to_hit_guidance: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          doctor_calls_last_week?: number | null
+          guidance_number: number
+          id?: string
+          notes?: string | null
+          paid_members?: number
+          strategic_activities?: string | null
+          strategy_changed?: boolean | null
+          touches_mer_last_week?: number | null
+          touches_pa_last_week?: number | null
+          transition_id: string
+          updated_at?: string | null
+          week_ending_date: string
+          weekly_needed_to_hit_guidance?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          doctor_calls_last_week?: number | null
+          guidance_number?: number
+          id?: string
+          notes?: string | null
+          paid_members?: number
+          strategic_activities?: string | null
+          strategy_changed?: boolean | null
+          touches_mer_last_week?: number | null
+          touches_pa_last_week?: number | null
+          transition_id?: string
+          updated_at?: string | null
+          week_ending_date?: string
+          weekly_needed_to_hit_guidance?: number | null
+        }
+        Relationships: []
+      }
+      weekly_thresholds: {
+        Row: {
+          behind_pace_thresholds: Json
+          id: string
+          min_touches: number
+          stalling_wow_threshold: number
+          updated_at: string | null
+        }
+        Insert: {
+          behind_pace_thresholds?: Json
+          id?: string
+          min_touches?: number
+          stalling_wow_threshold?: number
+          updated_at?: string | null
+        }
+        Update: {
+          behind_pace_thresholds?: Json
+          id?: string
+          min_touches?: number
+          stalling_wow_threshold?: number
+          updated_at?: string | null
         }
         Relationships: []
       }
