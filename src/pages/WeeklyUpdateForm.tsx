@@ -154,7 +154,7 @@ export default function WeeklyUpdateForm() {
 
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-accent uppercase tracking-wider">Team Ratings</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><label className={labelClass}>PA Effectiveness</label><StarRating value={form.pa_effectiveness_rating} onChange={v => set('pa_effectiveness_rating', v)} size="md" /></div>
             <div><label className={labelClass}>Physician Engagement</label><StarRating value={form.physician_engagement_rating} onChange={v => set('physician_engagement_rating', v)} size="md" /></div>
             <div><label className={labelClass}>Staff Engagement</label><StarRating value={form.staff_engagement_rating} onChange={v => set('staff_engagement_rating', v)} size="md" /></div>
@@ -164,7 +164,7 @@ export default function WeeklyUpdateForm() {
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-accent uppercase tracking-wider">Activities</h2>
           <Toggle value={form.physician_making_personal_calls} onChange={v => set('physician_making_personal_calls', v)} label="Physician making personal calls" />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><label className={labelClass}>Forums Scheduled</label><input type="number" className={inputClass} value={form.forums_scheduled} onChange={e => set('forums_scheduled', Number(e.target.value))} /></div>
             <div><label className={labelClass}>Forums Held</label><input type="number" className={inputClass} value={form.forums_held} onChange={e => set('forums_held', Number(e.target.value))} /></div>
             <div><label className={labelClass}>Attendance</label><input type="number" className={inputClass} value={form.forum_attendance} onChange={e => set('forum_attendance', e.target.value)} /></div>

@@ -140,7 +140,7 @@ export default function CoachingLogForm() {
             <span className="text-sm text-foreground">Follow-up needed</span>
           </label>
           {form.follow_up_needed && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className={labelClass}>Follow-up Date</label><input type="date" className={inputClass} value={form.follow_up_date} onChange={e => set('follow_up_date', e.target.value)} /></div>
               <div><label className={labelClass}>Follow-up Notes</label><input className={inputClass} value={form.follow_up_notes} onChange={e => set('follow_up_notes', e.target.value)} /></div>
             </div>
