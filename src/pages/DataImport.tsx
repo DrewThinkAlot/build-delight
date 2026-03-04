@@ -129,7 +129,7 @@ export default function DataImport() {
   const hasChanges = preview && (preview.newTransitions.length > 0 || preview.updatedTransitions.length > 0);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
       <h1 className="text-xl font-bold text-foreground">Data Import</h1>
       <p className="text-sm text-muted-foreground">
         Import historical transition data from MDVIP monthly XLSX files.
@@ -141,7 +141,7 @@ export default function DataImport() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`metric-card flex flex-col items-center justify-center py-16 border-2 border-dashed transition-colors cursor-pointer ${
+        className={`metric-card flex flex-col items-center justify-center py-10 sm:py-16 border-2 border-dashed transition-colors cursor-pointer ${
           dragOver ? 'border-accent bg-accent/5' : 'border-border'
         }`}
       >
@@ -275,22 +275,22 @@ export default function DataImport() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Physician</th>
-                      <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Open Date</th>
+                      <th className="text-left py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">Open Date</th>
                       <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Paid</th>
                       <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Paid</th>
-                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Growth</th>
-                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Growth</th>
+                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">Old Growth</th>
+                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">New Growth</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preview.updatedTransitions.map((upd, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        <td className="py-1.5 pr-3 text-foreground">{upd.physician_name}</td>
-                        <td className="py-1.5 pr-3 text-foreground">{upd.opening_date ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-foreground truncate max-w-[120px]">{upd.physician_name}</td>
+                        <td className="py-1.5 pr-3 text-foreground hidden sm:table-cell">{upd.opening_date ?? '—'}</td>
                         <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_paid_members ?? '—'}</td>
                         <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_paid_members ?? '—'}</td>
-                        <td className="py-1.5 pr-3 text-right text-muted-foreground">{upd.old_post_open_growth ?? '—'}</td>
-                        <td className="py-1.5 pr-3 text-right text-accent font-medium">{upd.new_post_open_growth ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-right text-muted-foreground hidden sm:table-cell">{upd.old_post_open_growth ?? '—'}</td>
+                        <td className="py-1.5 pr-3 text-right text-accent font-medium hidden sm:table-cell">{upd.new_post_open_growth ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -339,11 +339,11 @@ export default function DataImport() {
 
           {/* Action buttons */}
           {!committed && (
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <button
                 onClick={handleCancel}
                 disabled={committing}
-                className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded transition-colors disabled:opacity-50"
+                className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
               >
                 Cancel
               </button>
@@ -351,12 +351,12 @@ export default function DataImport() {
                 <button
                   onClick={handleConfirm}
                   disabled={committing}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-accent text-accent-foreground font-medium text-sm rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-accent-foreground font-medium text-sm rounded hover:bg-accent/90 transition-colors disabled:opacity-50 w-full sm:w-auto"
                 >
                   {committing ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Committing…</>
+                    <><Loader2 className="h-4 w-4 animate-spin" /> <span>Committing…</span></>
                   ) : (
-                    <><Database className="h-4 w-4" /> Confirm Import ({preview.newTransitions.length} new, {preview.updatedTransitions.length} updated)</>
+                    <><Database className="h-4 w-4 shrink-0" /> <span className="truncate">Confirm ({preview.newTransitions.length} new, {preview.updatedTransitions.length} updated)</span></>
                   )}
                 </button>
               )}
