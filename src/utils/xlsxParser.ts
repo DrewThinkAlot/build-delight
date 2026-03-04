@@ -134,7 +134,7 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
     const sheet = workbook.Sheets[sheetName];
 
     // Try header at row 9 (0-indexed 8), then row 1 as fallback
-    let jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+    const jsonData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as unknown[][];
 
     // Find header row — look for a row containing "Account Name" (case-insensitive)
     let headerRowIdx = 8; // default row 9
