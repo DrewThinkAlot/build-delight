@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTransitions } from '@/contexts/TransitionContext';
 import { getActiveWeights, calculateRiskScore, getSimilarTransitions, type ActiveWeightsResult, type RiskScoreResult, type BenchmarkComparison } from '@/lib/riskScorer';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { RiskScoreCard } from '@/components/shared/RiskScoreCard';
 import { cn } from '@/lib/utils';
 import { Transition } from '@/types/transition';
-import { AlertTriangle, ShieldCheck, Info } from 'lucide-react';
+
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 
@@ -164,15 +165,6 @@ export default function NewTransition() {
   const inputClass = "w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent";
   const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const tierColor = !liveRisk ? 'border-border' :
-    liveRisk.tier === 'CRITICAL' ? 'border-status-critical' :
-    liveRisk.tier === 'HIGH' ? 'border-status-behind' :
-    liveRisk.tier === 'MODERATE' ? 'border-status-on-track' : 'border-status-ahead';
-
-  const tierBg = !liveRisk ? 'bg-muted/30' :
-    liveRisk.tier === 'CRITICAL' ? 'bg-status-critical/10' :
-    liveRisk.tier === 'HIGH' ? 'bg-status-behind/10' :
-    liveRisk.tier === 'MODERATE' ? 'bg-status-on-track/10' : 'bg-status-ahead/10';
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -286,7 +278,7 @@ export default function NewTransition() {
 
           {/* Mobile risk panel (shown below form on small screens) */}
           <div className="lg:hidden">
-            <RiskPanel liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} tierColor={tierColor} tierBg={tierBg} />
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
           </div>
 
           <button type="submit" className="w-full px-4 py-3 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors">
@@ -297,7 +289,7 @@ export default function NewTransition() {
         {/* ── Sticky sidebar risk panel (desktop) ── */}
         <div className="hidden lg:block">
           <div className="sticky top-6">
-            <RiskPanel liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} tierColor={tierColor} tierBg={tierBg} />
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
           </div>
         </div>
       </div>
@@ -305,89 +297,3 @@ export default function NewTransition() {
   );
 }
 
-// ── Live Risk Panel Component ──────────────────────────────────────────
-
-function RiskPanel({ liveRisk, comparisons, calibration, tierColor, tierBg }: {
-  liveRisk: RiskScoreResult | null;
-  comparisons: BenchmarkComparison[];
-  calibration: ActiveWeightsResult | null;
-  tierColor: string;
-  tierBg: string;
-}) {
-  if (!liveRisk) {
-    return (
-      <div className="metric-card text-center text-sm text-muted-foreground">
-        <ShieldCheck className="h-5 w-5 mx-auto mb-2 text-muted-foreground/50" />
-        Loading risk model…
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Score card */}
-      <div className={cn('metric-card text-center border-2 transition-colors', tierColor, tierBg)}>
-        <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Live Risk Score</p>
-        <div className={cn('text-4xl font-bold font-mono',
-          liveRisk.tier === 'CRITICAL' ? 'text-status-critical' :
-          liveRisk.tier === 'HIGH' ? 'text-status-behind' :
-          liveRisk.tier === 'MODERATE' ? 'text-status-on-track' : 'text-status-ahead'
-        )}>{liveRisk.score}</div>
-        <StatusBadge status={liveRisk.tier} className="mt-1" />
-      </div>
-
-      {/* Contributing factors */}
-      {liveRisk.factors.length > 0 && (
-        <div className="metric-card">
-          <div className="flex items-center gap-1.5 mb-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-status-behind" />
-            <h3 className="text-xs font-semibold text-foreground">Risk Factors ({liveRisk.factors.length})</h3>
-          </div>
-          <div className="space-y-1.5">
-            {liveRisk.factors.map((f) => (
-              <div key={f.id} className="flex justify-between items-start gap-2 text-xs">
-                <span className="text-muted-foreground leading-tight">
-                  {f.label}
-                  {f.confidence === 'qualitative' && <span className="ml-1 text-[10px] text-muted-foreground/60">(qual)</span>}
-                </span>
-                <span className="font-mono text-status-behind shrink-0">+{f.points}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {liveRisk.factors.length === 0 && liveRisk.score === 0 && (
-        <div className="metric-card text-center">
-          <ShieldCheck className="h-4 w-4 mx-auto mb-1 text-status-ahead" />
-          <p className="text-xs text-muted-foreground">No risk factors detected</p>
-        </div>
-      )}
-
-      {/* Benchmark comparisons */}
-      {comparisons.length > 0 && (
-        <div className="metric-card">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Info className="h-3.5 w-3.5 text-accent" />
-            <h3 className="text-xs font-semibold text-foreground">Benchmarks</h3>
-          </div>
-          <div className="space-y-1.5">
-            {comparisons.map((c, i) => (
-              <div key={i} className="flex justify-between text-xs">
-                <span className="text-muted-foreground">{c.label}</span>
-                <span className="font-mono text-foreground">{(c.hit_rate * 100).toFixed(0)}% <span className="text-muted-foreground">(n={c.n})</span></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Calibration info */}
-      {calibration && (
-        <p className="text-[10px] text-muted-foreground/60 text-center">
-          Model: n={calibration.nTransitions} • {new Date(calibration.calibrationDate).toLocaleDateString()}
-        </p>
-      )}
-    </div>
-  );
-}
