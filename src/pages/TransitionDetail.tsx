@@ -3,11 +3,13 @@ import { useTransitions } from '@/contexts/TransitionContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
+import { RiskScoreCard } from '@/components/shared/RiskScoreCard';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Phone, Video, Mail, MessageSquare, MapPin, CheckCircle2, XCircle, Clock, Sparkles } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { ENROLLMENT_CURVE, getExpectedPct } from '@/data/sampleData';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { getActiveWeights, calculateRiskScore, getSimilarTransitions, type ActiveWeightsResult, type RiskScoreResult, type BenchmarkComparison } from '@/lib/riskScorer';
 
 const tabs = ['Overview', 'Weekly Updates', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
 
@@ -26,13 +28,54 @@ export default function TransitionDetail() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>(initialTab);
   const { getTransition, getUpdatesForTransition, getLogsForTransition, getAlertsForTransition, getLatestUpdate } = useTransitions();
 
-  const transition = getTransition(id!);
-  if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
+  // Risk scoring hooks (must be before early return)
+  const [calibration, setCalibration] = useState<ActiveWeightsResult | null>(null);
+  useEffect(() => { getActiveWeights().then(setCalibration); }, []);
 
-  const updates = getUpdatesForTransition(id!);
-  const logs = getLogsForTransition(id!);
-  const alerts = getAlertsForTransition(id!);
-  const latest = getLatestUpdate(id!);
+  const transition = getTransition(id!);
+  const updates = transition ? getUpdatesForTransition(id!) : [];
+  const logs = transition ? getLogsForTransition(id!) : [];
+  const alerts = transition ? getAlertsForTransition(id!) : [];
+  const latest = transition ? getLatestUpdate(id!) : undefined;
+
+  const liveRisk: RiskScoreResult | null = useMemo(() => {
+    if (!calibration || !transition) return null;
+    const input = {
+      coc_type: transition.coc_type || '',
+      guidance_number: transition.guidance_number,
+      msrp_at_open: transition.msrp_at_open ?? null,
+      total_weeks: transition.total_weeks ?? null,
+      state: transition.state || '',
+      physician_full_time: transition.physician_full_time,
+      physician_has_strong_patient_relationships: transition.physician_has_strong_patient_relationships,
+      physician_comfortable_discussing_fees: transition.physician_comfortable_discussing_fees,
+      physician_engagement_level: transition.physician_engagement_level || 'High',
+      partner_group_aligned: transition.partner_group_aligned,
+      medicaid_pct: transition.medicaid_pct ?? null,
+      medicare_dual_pct: transition.medicare_dual_pct ?? null,
+      pre_survey_patients: transition.pre_survey_patients ?? null,
+      pre_survey_over_55: transition.pre_survey_over_55 ?? null,
+      specialty: transition.specialty,
+    };
+    const result = calculateRiskScore(input, calibration.weights);
+    result.calibration_date = calibration.calibrationDate;
+    result.n_historical = calibration.nTransitions;
+    return result;
+  }, [transition, calibration]);
+
+  const comparisons: BenchmarkComparison[] = useMemo(() => {
+    if (!calibration || !transition) return [];
+    return getSimilarTransitions({
+      coc_type: transition.coc_type || '', guidance_number: transition.guidance_number,
+      msrp_at_open: null, total_weeks: null, state: transition.state || '',
+      physician_full_time: true, physician_has_strong_patient_relationships: true,
+      physician_comfortable_discussing_fees: true, physician_engagement_level: 'High',
+      partner_group_aligned: true, medicaid_pct: null, medicare_dual_pct: null,
+      pre_survey_patients: null, pre_survey_over_55: null, specialty: transition.specialty,
+    }, calibration.benchmarks);
+  }, [transition, calibration]);
+
+  if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
 
   // Chart data
   const totalWeeks = transition.total_weeks || 20;
@@ -86,46 +129,40 @@ export default function TransitionDetail() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Risk card */}
-            <div className="metric-card text-center">
-              <div className={cn('text-4xl font-bold font-mono',
-                transition.risk_tier === 'CRITICAL' ? 'text-status-critical' :
-                transition.risk_tier === 'HIGH' ? 'text-status-behind' :
-                transition.risk_tier === 'MODERATE' ? 'text-status-on-track' : 'text-status-ahead'
-              )}>{transition.risk_score || 0}</div>
-              <StatusBadge status={transition.risk_tier || 'LOW'} className="mt-1" />
-              <p className="text-xs text-muted-foreground mt-2">Risk Score</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+            {/* Risk score card */}
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
 
-            {/* Pacing */}
-            <div className="metric-card">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Progress</p>
-              <div className="text-2xl font-bold font-mono text-foreground">
-                {transition.current_paid_members || 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
-              </div>
-              <ProgressBar value={transition.current_paid_members || 0} max={transition.guidance_number} className="mt-2" />
-              {latest && (
-                <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                  <p>Need {latest.members_per_week_needed}/week to hit guidance</p>
-                  <p>Projected opening: {latest.projected_opening_number}</p>
+            <div className="space-y-4">
+              {/* Pacing */}
+              <div className="metric-card">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Progress</p>
+                <div className="text-2xl font-bold font-mono text-foreground">
+                  {transition.current_paid_members || 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Team */}
-            <div className="metric-card">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Team</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">PA</span><span className="text-foreground">{transition.assigned_pa}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">PTM</span><span className="text-foreground">{transition.assigned_ptm}</span></div>
+                <ProgressBar value={transition.current_paid_members || 0} max={transition.guidance_number} className="mt-2" />
                 {latest && (
-                  <>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latest.pa_effectiveness_rating || 0} /></div>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latest.physician_engagement_rating || 0} /></div>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latest.staff_engagement_rating || 0} /></div>
-                  </>
+                  <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                    <p>Need {latest.members_per_week_needed}/week to hit guidance</p>
+                    <p>Projected opening: {latest.projected_opening_number}</p>
+                  </div>
                 )}
+              </div>
+
+              {/* Team */}
+              <div className="metric-card">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Team</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">PA</span><span className="text-foreground">{transition.assigned_pa}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PTM</span><span className="text-foreground">{transition.assigned_ptm}</span></div>
+                  {latest && (
+                    <>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latest.pa_effectiveness_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latest.physician_engagement_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latest.staff_engagement_rating || 0} /></div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
