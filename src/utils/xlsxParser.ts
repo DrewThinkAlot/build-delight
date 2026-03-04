@@ -74,33 +74,47 @@ export interface ExistingRecord {
 
 // ─── Column mapping ────────────────────────────────────────────
 
-const COLUMN_MAP: Record<string, string> = {
-  'account name': 'physician_name',
-  'physicianid': 'physician_id',
-  'physician id': 'physician_id',
-  'opening date': 'opening_date',
-  'fiscal month': 'fiscal_month',
-  'guidance number': 'guidance_number',
-  'opening balance': 'opening_balance',
-  'pre survey patients': 'pre_survey_patients',
-  'pre survey over 55': 'pre_survey_over_55',
-  'post survey patients': 'post_survey_patients',
-  'wtc 55+': 'wtc_55_plus',
-  'wtc 55 plus': 'wtc_55_plus',
-  'segmentation': 'segmentation',
-  'state': 'state',
-  'city': 'city',
-  'msrp @ open': 'msrp_at_open',
-  'msrp at open': 'msrp_at_open',
-  'total weeks in transition': 'total_weeks',
-  'total weeks': 'total_weeks',
-  'expected yield': 'expected_yield',
-  'total yield': 'actual_yield',
-  'actual yield': 'actual_yield',
-  '# of paid members': 'paid_members_current',
-  'paid members': 'paid_members_current',
-  'number of paid members': 'paid_members_current',
+// Maps each DB field to all known header variations (lowercase, trimmed at match time)
+const COLUMN_ALIASES: Record<string, string[]> = {
+  physician_name: ['account name', 'physician name', 'doctor name', 'provider name', 'dr name'],
+  physician_id: ['physicianid', 'physician id', 'physician_id', 'provider id', 'dr id'],
+  opening_date: ['opening date', 'open date', 'transition open date'],
+  fiscal_month: ['fiscal month', 'fiscal mo', 'fiscal period'],
+  guidance_number: ['guidance number', 'guidance', 'gd', 'guidance #', 'guidance num'],
+  opening_balance: ['opening balance', 'opening #', 'founding members', 'opening number', 'open balance'],
+  pre_survey_patients: ['pre survey patients', 'pre-survey patients', 'presurvey patients', 'pre survey pts'],
+  pre_survey_over_55: ['pre survey over 55', 'pre-survey over 55', 'pre survey 55+', 'pre survey >55'],
+  post_survey_patients: ['post survey patients', 'post-survey patients', 'postsurvey patients', 'post survey pts'],
+  wtc_55_plus: ['wtc 55+', 'wtc 55 plus', 'wtc55+', 'wtc over 55', 'willing to convert 55+'],
+  segmentation: ['segmentation', 'segment', 'seg'],
+  state: ['state', 'st'],
+  city: ['city'],
+  msrp_at_open: ['msrp @ open', 'msrp at open', 'msrp', 'msrp at opening', 'msrp@open'],
+  total_weeks: ['total weeks in transition', 'total weeks', 'weeks in transition', 'transition weeks'],
+  expected_yield: ['expected yield', 'exp yield', 'expected'],
+  actual_yield: ['total yield', 'actual yield', 'yield'],
+  paid_members_current: ['# of paid members', 'paid members', 'number of paid members', 'paid mbrs', 'current paid members', 'paid member count'],
 };
+
+// Build a reverse lookup: lowercased alias → field name
+const ALIAS_LOOKUP = new Map<string, string>();
+for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+  for (const alias of aliases) {
+    ALIAS_LOOKUP.set(alias.toLowerCase().trim(), field);
+  }
+}
+
+function matchHeader(raw: string): string | null {
+  const clean = raw.toLowerCase().trim().replace(/\s+/g, ' ');
+  // Exact match first
+  const exact = ALIAS_LOOKUP.get(clean);
+  if (exact) return exact;
+  // Substring match: check if any alias is contained in the header or vice versa
+  for (const [alias, field] of ALIAS_LOOKUP.entries()) {
+    if (clean.includes(alias) || alias.includes(clean)) return field;
+  }
+  return null;
+}
 
 const STRING_FIELDS = new Set(['physician_name', 'physician_id', 'fiscal_month', 'segmentation', 'state', 'city']);
 const DATE_FIELDS = new Set(['opening_date']);
