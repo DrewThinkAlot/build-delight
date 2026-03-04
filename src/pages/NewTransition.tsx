@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTransitions } from '@/contexts/TransitionContext';
 import { getActiveWeights, calculateRiskScore, getSimilarTransitions, type ActiveWeightsResult, type RiskScoreResult, type BenchmarkComparison } from '@/lib/riskScorer';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { RiskScoreCard } from '@/components/shared/RiskScoreCard';
 import { cn } from '@/lib/utils';
 import { Transition } from '@/types/transition';
 import { AlertTriangle, ShieldCheck, Info } from 'lucide-react';
