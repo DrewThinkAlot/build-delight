@@ -143,6 +143,48 @@ export type Database = {
         }
         Relationships: []
       }
+      risk_weights: {
+        Row: {
+          benchmarks: Json
+          calibration_date: string
+          calibration_label: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          n_hit: number
+          n_missed: number
+          n_transitions: number
+          overall_hit_rate: number | null
+          weights: Json
+        }
+        Insert: {
+          benchmarks?: Json
+          calibration_date?: string
+          calibration_label?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          n_hit?: number
+          n_missed?: number
+          n_transitions?: number
+          overall_hit_rate?: number | null
+          weights?: Json
+        }
+        Update: {
+          benchmarks?: Json
+          calibration_date?: string
+          calibration_label?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          n_hit?: number
+          n_missed?: number
+          n_transitions?: number
+          overall_hit_rate?: number | null
+          weights?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
