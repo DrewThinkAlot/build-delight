@@ -420,7 +420,7 @@ function HistoricalImportSection() {
 // ═══════════════════════════════════════════════════════════════════════
 
 function SnapshotImportSection() {
-  const { transitions } = useTransitions();
+  const { data: transitions = [] } = useTransitionsList();
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [committing, setCommitting] = useState(false);

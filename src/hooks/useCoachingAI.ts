@@ -99,7 +99,7 @@ export function useCoachingAI() {
       if (lastError) throw lastError;
       if (!resp!.body) throw new Error('No response stream');
 
-      const reader = resp.body.getReader();
+      const reader = resp!.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let accumulated = '';
