@@ -63,6 +63,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {recalBanner.show && (
+        <Link to="/calibration" className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-accent/10 border border-accent/20 text-sm text-accent hover:bg-accent/15 transition-colors">
+          <BarChart3 className="h-4 w-4 shrink-0" />
+          <span>📊 {recalBanner.count} new transitions since last calibration. Consider recalibrating your risk model.</span>
+        </Link>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Portfolio Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Active transition overview</p>
