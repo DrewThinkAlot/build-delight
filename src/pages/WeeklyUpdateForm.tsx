@@ -5,6 +5,9 @@ import { StarRating } from '@/components/shared/StarRating';
 import { getExpectedPct } from '@/data/sampleData';
 import { WeeklyUpdate } from '@/types/transition';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
+import { useCoachingAI } from '@/hooks/useCoachingAI';
 
 export default function WeeklyUpdateForm() {
   const { id } = useParams<{ id: string }>();
