@@ -20,40 +20,6 @@ export function getExpectedPct(pctOfTransition: number): number {
   return 1.0;
 }
 
-export function calculateRiskScore(t: Partial<Transition>): { score: number; tier: string; factors: { label: string; points: number }[] } {
-  let score = 0;
-  const factors: { label: string; points: number }[] = [];
-
-  if (t.coc_type === 'COC Out') { score += 15; factors.push({ label: 'COC Out transition', points: 15 }); }
-  if (t.guidance_number && t.guidance_number <= 125) { score += 6; factors.push({ label: 'Low guidance number (≤125)', points: 6 }); }
-  if (t.msrp_at_open && t.msrp_at_open > 2700) { score += 14; factors.push({ label: 'High MSRP (>$2,700)', points: 14 }); }
-  else if (t.msrp_at_open && t.msrp_at_open > 2500) { score += 5; factors.push({ label: 'Elevated MSRP (>$2,500)', points: 5 }); }
-  if (t.total_weeks && t.total_weeks <= 12) { score += 15; factors.push({ label: 'Short timeline (≤12 weeks)', points: 15 }); }
-  else if (t.total_weeks && t.total_weeks <= 16) { score += 8; factors.push({ label: 'Compressed timeline (≤16 weeks)', points: 8 }); }
-  if (t.state && ['PA', 'NJ'].includes(t.state)) { score += 10; factors.push({ label: `Challenging state (${t.state})`, points: 10 }); }
-  else if (t.state && ['CA', 'NY'].includes(t.state)) { score += 5; factors.push({ label: `Competitive state (${t.state})`, points: 5 }); }
-  if (!t.physician_full_time) { score += 10; factors.push({ label: 'Part-time physician', points: 10 }); }
-  if (!t.physician_has_strong_patient_relationships) { score += 12; factors.push({ label: 'Weak patient relationships', points: 12 }); }
-  if (!t.physician_comfortable_discussing_fees) { score += 8; factors.push({ label: 'Uncomfortable discussing fees', points: 8 }); }
-  if (t.physician_engagement_level === 'Low') { score += 10; factors.push({ label: 'Low physician engagement', points: 10 }); }
-  if (!t.partner_group_aligned) { score += 15; factors.push({ label: 'Partner group not aligned', points: 15 }); }
-  if (t.medicaid_pct && t.medicaid_pct > 0.30) { score += 20; factors.push({ label: 'High Medicaid (>30%)', points: 20 }); }
-  else if (t.medicaid_pct && t.medicaid_pct > 0.15) { score += 10; factors.push({ label: 'Elevated Medicaid (>15%)', points: 10 }); }
-  if (t.medicare_dual_pct && t.medicare_dual_pct > 0.30) { score += 20; factors.push({ label: 'High Medicare dual (>30%)', points: 20 }); }
-  if (t.pre_survey_patients && t.pre_survey_patients > 0 && t.pre_survey_over_55) {
-    if ((t.pre_survey_over_55 / t.pre_survey_patients) < 0.50) {
-      score += 8; factors.push({ label: 'Low 55+ ratio (<50%)', points: 8 });
-    }
-  }
-
-  score = Math.min(score, 100);
-  let tier = 'LOW';
-  if (score >= 61) tier = 'CRITICAL';
-  else if (score >= 41) tier = 'HIGH';
-  else if (score >= 21) tier = 'MODERATE';
-
-  return { score, tier, factors };
-}
 
 function weeksRemaining(openingDate: string): number {
   const now = new Date();
