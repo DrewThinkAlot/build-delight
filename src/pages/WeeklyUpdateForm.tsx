@@ -17,7 +17,10 @@ export default function WeeklyUpdateForm() {
 
   const transition = getTransition(id!);
   const updates = getUpdatesForTransition(id!);
-  const lastUpdate = updates[0]; // sorted desc
+  const logs = getLogsForTransition(id!);
+  const lastUpdate = updates[0];
+  const [saved, setSaved] = useState(false);
+  const [savedUpdate, setSavedUpdate] = useState<WeeklyUpdate | null>(null);
 
   const [form, setForm] = useState({
     current_paid_members: '',
