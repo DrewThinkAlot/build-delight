@@ -129,46 +129,40 @@ export default function TransitionDetail() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Risk card */}
-            <div className="metric-card text-center">
-              <div className={cn('text-4xl font-bold font-mono',
-                transition.risk_tier === 'CRITICAL' ? 'text-status-critical' :
-                transition.risk_tier === 'HIGH' ? 'text-status-behind' :
-                transition.risk_tier === 'MODERATE' ? 'text-status-on-track' : 'text-status-ahead'
-              )}>{transition.risk_score || 0}</div>
-              <StatusBadge status={transition.risk_tier || 'LOW'} className="mt-1" />
-              <p className="text-xs text-muted-foreground mt-2">Risk Score</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+            {/* Risk score card */}
+            <RiskScoreCard liveRisk={liveRisk} comparisons={comparisons} calibration={calibration} />
 
-            {/* Pacing */}
-            <div className="metric-card">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Progress</p>
-              <div className="text-2xl font-bold font-mono text-foreground">
-                {transition.current_paid_members || 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
-              </div>
-              <ProgressBar value={transition.current_paid_members || 0} max={transition.guidance_number} className="mt-2" />
-              {latest && (
-                <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                  <p>Need {latest.members_per_week_needed}/week to hit guidance</p>
-                  <p>Projected opening: {latest.projected_opening_number}</p>
+            <div className="space-y-4">
+              {/* Pacing */}
+              <div className="metric-card">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Progress</p>
+                <div className="text-2xl font-bold font-mono text-foreground">
+                  {transition.current_paid_members || 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Team */}
-            <div className="metric-card">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Team</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">PA</span><span className="text-foreground">{transition.assigned_pa}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">PTM</span><span className="text-foreground">{transition.assigned_ptm}</span></div>
+                <ProgressBar value={transition.current_paid_members || 0} max={transition.guidance_number} className="mt-2" />
                 {latest && (
-                  <>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latest.pa_effectiveness_rating || 0} /></div>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latest.physician_engagement_rating || 0} /></div>
-                    <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latest.staff_engagement_rating || 0} /></div>
-                  </>
+                  <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                    <p>Need {latest.members_per_week_needed}/week to hit guidance</p>
+                    <p>Projected opening: {latest.projected_opening_number}</p>
+                  </div>
                 )}
+              </div>
+
+              {/* Team */}
+              <div className="metric-card">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Team</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">PA</span><span className="text-foreground">{transition.assigned_pa}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PTM</span><span className="text-foreground">{transition.assigned_ptm}</span></div>
+                  {latest && (
+                    <>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latest.pa_effectiveness_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latest.physician_engagement_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latest.staff_engagement_rating || 0} /></div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
