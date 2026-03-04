@@ -209,8 +209,17 @@ export function parseTransitionXlsx(buffer: ArrayBuffer): ParseResult {
         }
       }
 
-      // Skip rows without a physician name
-      if (!record.physician_name) {
+      // Filter rules
+      const name = (record.physician_name ?? '').toLowerCase();
+      if (!record.physician_name || name === 'totals' || name === 'averages') {
+        skippedRows++;
+        continue;
+      }
+      if (record.guidance_number == null || record.guidance_number <= 0) {
+        skippedRows++;
+        continue;
+      }
+      if (record.opening_balance == null) {
         skippedRows++;
         continue;
       }
