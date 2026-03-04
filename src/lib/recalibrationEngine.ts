@@ -663,18 +663,24 @@ export async function saveCalibration(result: RecalibrationResult, label?: strin
     .update({ is_active: false })
     .eq("is_active", true);
 
+  const nHit = Math.round(result.summary.overall_hit_rate * result.summary.n_transitions);
+  const nMissed = result.summary.n_transitions - nHit;
+
   // Insert the new calibration as active
   const { error } = await supabase.from("risk_weights").insert([{
+    calibration_date: new Date().toISOString(),
+    calibration_label: label ??
+      `Auto-calibration from ${result.summary.n_transitions} transitions. ` +
+      `${result.summary.factors_data_driven} data-driven, ` +
+      `${result.summary.factors_qualitative} qualitative. ` +
+      `${result.summary.factors_changed} changed.`,
     weights: JSON.parse(JSON.stringify(result.weights)),
     benchmarks: JSON.parse(JSON.stringify(result.benchmarks)),
     is_active: true,
     n_transitions: result.summary.n_transitions,
-    n_hit: Math.round(result.summary.overall_hit_rate * result.summary.n_transitions),
-    n_missed: Math.round(
-      (1 - result.summary.overall_hit_rate) * result.summary.n_transitions
-    ),
+    n_hit: nHit,
+    n_missed: nMissed,
     overall_hit_rate: result.summary.overall_hit_rate,
-    calibration_label: label ?? null,
   }]);
 
   if (error) throw error;
