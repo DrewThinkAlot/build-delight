@@ -453,7 +453,7 @@ export default function TransitionDetail() {
                       {(u.net_change_from_last_week || 0) >= 0 ? '+' : ''}{u.net_change_from_last_week}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 mt-2">
+                  <div className="flex items-center gap-4 mt-2 flex-wrap">
                     <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">PA</span><StarRating value={u.pa_effectiveness_rating || 0} /></div>
                     <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Dr</span><StarRating value={u.physician_engagement_rating || 0} /></div>
                     <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Staff</span><StarRating value={u.staff_engagement_rating || 0} /></div>

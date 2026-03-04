@@ -226,7 +226,7 @@ export default function ModelCalibration() {
       {/* ── Data Available ─────────────────────────────────────────── */}
       <div className="metric-card">
         <h3 className="text-sm font-semibold text-foreground mb-3">Data Available</h3>
-        <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground text-xs block">Total in DB</span>
             <span className="font-mono text-foreground">{dataStats.totalTransitions}</span>
