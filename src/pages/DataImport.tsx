@@ -275,11 +275,11 @@ export default function DataImport() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Physician</th>
-                      <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Open Date</th>
+                      <th className="text-left py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">Open Date</th>
                       <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Paid</th>
                       <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Paid</th>
-                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Growth</th>
-                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Growth</th>
+                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">Old Growth</th>
+                      <th className="text-right py-2 pr-3 text-muted-foreground font-medium hidden sm:table-cell">New Growth</th>
                     </tr>
                   </thead>
                   <tbody>
