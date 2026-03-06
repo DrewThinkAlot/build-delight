@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { Sparkles, Loader2, Copy, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -7,7 +6,8 @@ import { useCoachingAI } from '@/hooks/useCoachingAI';
 import { CoachingFeature } from '@/lib/aiPrompts';
 import { getCachedContent } from '@/lib/aiCoachingService';
 import { formatMarkdown } from '@/lib/formatMarkdown';
-import type { Transition, WeeklyUpdate, CoachingLog } from '@/types/transition';
+import type { Transition, CoachingLog } from '@/types/transition';
+import type { WeeklySnapshot } from '@/types/weeklyIntelligence';
 
 const moodEmoji: Record<string, string> = {
   enthusiastic: '🔥', engaged: '😊', neutral: '😐', frustrated: '😤', disengaged: '😞', cold_feet: '🥶',
@@ -25,20 +25,20 @@ const SECTIONS: {
   { key: 'leadership_update', title: 'Leadership Update', desc: 'Concise status update for leadership briefing', bgClass: 'bg-purple-500/5 border-purple-500/20' },
 ];
 
-function AICoachingSection({ section, transition, updates, logs, latest }: {
+function AICoachingSection({ section, transition, snapshots, logs, latestSnapshot }: {
   section: typeof SECTIONS[number];
   transition: Transition;
-  updates: WeeklyUpdate[];
+  snapshots: WeeklySnapshot[];
   logs: CoachingLog[];
-  latest: WeeklyUpdate | undefined;
+  latestSnapshot: WeeklySnapshot | undefined;
 }) {
   const { generateForTransition, isLoading, content, error, result, reset } = useCoachingAI();
   const [hasGenerated, setHasGenerated] = useState(false);
 
   useEffect(() => {
-    const cached = getCachedContent(updates, section.key);
+    const cached = getCachedContent(snapshots, section.key);
     if (cached) {
-      generateForTransition(transition, updates, logs, section.key, false);
+      generateForTransition(transition, snapshots, logs, section.key, false);
       setHasGenerated(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,7 +46,7 @@ function AICoachingSection({ section, transition, updates, logs, latest }: {
 
   const handleGenerate = async (regenerate = false) => {
     setHasGenerated(true);
-    await generateForTransition(transition, updates, logs, section.key, regenerate);
+    await generateForTransition(transition, snapshots, logs, section.key, regenerate);
   };
 
   const handleCopy = (forSlack = false) => {
@@ -59,7 +59,7 @@ function AICoachingSection({ section, transition, updates, logs, latest }: {
   };
 
   if (section.key === 'recovery_plan') {
-    const pacing = latest?.pacing_status;
+    const pacing = latestSnapshot?.pacing_status;
     if (pacing !== 'BEHIND' && pacing !== 'CRITICAL') {
       return (
         <div className="metric-card opacity-60">
@@ -167,23 +167,21 @@ function AICoachingSection({ section, transition, updates, logs, latest }: {
 
 interface AICoachingTabProps {
   transition: Transition;
-  updates: WeeklyUpdate[];
+  snapshots: WeeklySnapshot[];
   logs: CoachingLog[];
-  latest: WeeklyUpdate | undefined;
 }
 
-export function AICoachingTab({ transition, updates, logs, latest }: AICoachingTabProps) {
-  if (updates.length === 0) {
+export function AICoachingTab({ transition, snapshots, logs }: AICoachingTabProps) {
+  const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : undefined;
+
+  if (snapshots.length === 0) {
     return (
       <div className="metric-card text-center py-10">
         <Sparkles className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
         <h3 className="font-semibold text-foreground mb-2">AI Coaching Needs Data</h3>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Log your first weekly update to enable AI coaching.
+          Log your first weekly snapshot to enable AI coaching.
         </p>
-        <Link to={`/transitions/${transition.id}/update`} className="inline-flex mt-4 px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors">
-          Log Weekly Update
-        </Link>
       </div>
     );
   }
@@ -195,9 +193,9 @@ export function AICoachingTab({ transition, updates, logs, latest }: AICoachingT
           key={section.key}
           section={section}
           transition={transition}
-          updates={updates}
+          snapshots={snapshots}
           logs={logs}
-          latest={latest}
+          latestSnapshot={latestSnapshot}
         />
       ))}
     </div>

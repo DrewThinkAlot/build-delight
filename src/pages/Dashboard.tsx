@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { MetricCard } from '@/components/shared/MetricCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
-import { StarRating } from '@/components/shared/StarRating';
 import { Users, AlertTriangle, CheckCircle2, TrendingUp, FileText, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -11,15 +10,14 @@ import { useAllTransitionsIntelligence } from '@/hooks/useWeeklySnapshots';
 import { worstSeverity } from '@/lib/weeklySignals';
 import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
 import { CoachPrepDrawer } from '@/components/weekly-intelligence/CoachPrepDrawer';
-import { useTransitionsList, useAllWeeklyUpdates, useAllCoachingLogs, useAlerts } from '@/hooks/useTransitionData';
+import { useTransitionsList, useAllCoachingLogs } from '@/hooks/useTransitionData';
 import { DashboardSkeleton } from '@/components/shared/PageSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
-import type { Transition, WeeklyUpdate } from '@/types/transition';
+import type { Transition } from '@/types/transition';
 
 export default function Dashboard() {
   const { data: transitions = [], isLoading } = useTransitionsList();
   const transitionIds = useMemo(() => transitions.map(t => t.id), [transitions]);
-  const { data: allUpdates = [] } = useAllWeeklyUpdates(transitionIds);
   const { data: allLogs = [] } = useAllCoachingLogs(transitionIds);
 
   const [showOnTrack, setShowOnTrack] = useState(false);
@@ -31,12 +29,6 @@ export default function Dashboard() {
   const completed = transitions.filter(t => t.status === 'completed');
 
   const { intelMap, refresh: refreshIntel } = useAllTransitionsIntelligence(active);
-
-  // Helper: get latest update for a transition
-  const getLatestUpdate = (id: string): WeeklyUpdate | undefined => {
-    const updates = allUpdates.filter(u => u.transition_id === id);
-    return updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : undefined;
-  };
 
   useEffect(() => {
     (async () => {
@@ -59,9 +51,7 @@ export default function Dashboard() {
       const sev = worstSeverity(intel.signals);
       return sev === 'red' || sev === 'yellow';
     }
-    const latest = getLatestUpdate(t.id);
-    return latest?.pacing_status === 'BEHIND' || latest?.pacing_status === 'CRITICAL' ||
-      t.risk_tier === 'HIGH' || t.risk_tier === 'CRITICAL';
+    return t.risk_tier === 'HIGH' || t.risk_tier === 'CRITICAL';
   }).sort((a, b) => {
     const aIntel = intelMap[a.id];
     const bIntel = intelMap[b.id];
@@ -106,14 +96,7 @@ export default function Dashboard() {
         });
       }
     } else {
-      const updates = allUpdates.filter(u => u.transition_id === t.id);
-      const latestUpdate = updates.length ? updates.reduce((a, b) => a.week_number > b.week_number ? a : b) : null;
-      if (latestUpdate) {
-        const daysSince = (Date.now() - new Date(latestUpdate.update_date).getTime()) / 86400000;
-        if (daysSince > 7) actionItems.push({ label: `Weekly update overdue (${Math.floor(daysSince)} days)`, severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
-      } else {
-        actionItems.push({ label: 'No weekly updates yet', severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
-      }
+      actionItems.push({ label: 'No weekly snapshots yet', severity: 'MODERATE', transitionId: t.id, physicianName: t.physician_name });
     }
 
     const logs = allLogs.filter(l => l.transition_id === t.id);
@@ -164,14 +147,12 @@ export default function Dashboard() {
         <MetricCard label="Behind" value={needsAttention.filter(t => {
           const intel = intelMap[t.id];
           if (intel) return worstSeverity(intel.signals) === 'yellow';
-          const u = getLatestUpdate(t.id);
-          return u?.pacing_status === 'BEHIND';
+          return false;
         }).length} icon={AlertTriangle} accentColor="text-status-behind" />
         <MetricCard label="Critical" value={needsAttention.filter(t => {
           const intel = intelMap[t.id];
           if (intel) return worstSeverity(intel.signals) === 'red';
-          const u = getLatestUpdate(t.id);
-          return u?.pacing_status === 'CRITICAL' || t.risk_tier === 'CRITICAL';
+          return t.risk_tier === 'CRITICAL';
         }).length} icon={AlertTriangle} accentColor="text-status-critical" />
       </div>
 
@@ -182,10 +163,10 @@ export default function Dashboard() {
           </h2>
           <div className="grid gap-3">
             {needsAttention.map(t => {
-              const latest = getLatestUpdate(t.id);
               const intel = intelMap[t.id];
               const weeksLeft = t.opening_date ? Math.max(0, Math.ceil((new Date(t.opening_date).getTime() - Date.now()) / (7 * 86400000))) : 0;
               const topSignals = intel?.signals.filter(s => s.severity !== 'green').slice(0, 2) ?? [];
+              const latestSnap = intel?.snapshots?.length ? intel.snapshots[intel.snapshots.length - 1] : null;
 
               return (
                 <Link key={t.id} to={`/transitions/${t.id}`} className="metric-card hover:border-accent/40 transition-colors group">
@@ -193,15 +174,14 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground">{t.physician_name}</span>
-                        <StatusBadge status={latest?.pacing_status || t.risk_tier || 'MODERATE'} />
+                        <StatusBadge status={latestSnap?.pacing_status || t.risk_tier || 'MODERATE'} />
                         <span className="text-xs text-muted-foreground">{weeksLeft} weeks left</span>
                       </div>
                       <div className="mt-2">
                         <ProgressBar value={intel?.metrics?.pace_to_guidance ? Math.round(intel.metrics.pace_to_guidance * t.guidance_number) : (t.current_paid_members || 0)} max={t.guidance_number} />
                         <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                          <span className="font-mono">{intel?.snapshots?.length ? intel.snapshots[intel.snapshots.length - 1].paid_members : (t.current_paid_members || 0)} / {t.guidance_number}</span>
+                          <span className="font-mono">{latestSnap?.paid_members ?? (t.current_paid_members || 0)} / {t.guidance_number}</span>
                           {intel?.metrics && <span>Projected: {intel.metrics.projected_paid_at_opening}</span>}
-                          {!intel?.metrics && latest?.members_per_week_needed && <span>Need {latest.members_per_week_needed}/wk</span>}
                         </div>
                       </div>
                       {topSignals.length > 0 && (
@@ -223,14 +203,6 @@ export default function Dashboard() {
                             t.risk_tier === 'MODERATE' ? 'text-status-on-track' : 'text-status-ahead'
                           )}>{t.risk_score}</div>
                           <div className="text-muted-foreground">Risk</div>
-                        </div>
-                      )}
-                      {latest && (
-                        <div className="hidden sm:flex items-center gap-2">
-                          <div className="text-center">
-                            <StarRating value={latest.pa_effectiveness_rating || 0} />
-                            <div className="text-muted-foreground mt-0.5">PA</div>
-                          </div>
                         </div>
                       )}
                     </div>

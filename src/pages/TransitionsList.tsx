@@ -5,7 +5,6 @@ import { Plus } from 'lucide-react';
 import { useTransitionsList } from '@/hooks/useTransitionData';
 import { ListSkeleton } from '@/components/shared/PageSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { useWeeklyUpdates } from '@/hooks/useTransitionData';
 
 export default function TransitionsList() {
   const { data: transitions, isLoading } = useTransitionsList();

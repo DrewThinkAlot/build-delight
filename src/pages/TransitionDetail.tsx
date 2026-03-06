@@ -1,5 +1,5 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { useTransition, useWeeklyUpdates, useCoachingLogs, useAlerts } from '@/hooks/useTransitionData';
+import { useTransition, useCoachingLogs, useAlerts } from '@/hooks/useTransitionData';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StarRating } from '@/components/shared/StarRating';
@@ -16,7 +16,7 @@ import { SnapshotModal } from '@/components/weekly-intelligence/SnapshotModal';
 import { AICoachingTab } from '@/components/ai-coaching/AICoachingTab';
 import { DetailSkeleton } from '@/components/shared/PageSkeleton';
 
-const tabs = ['Overview', 'Weekly Updates', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
+const tabs = ['Overview', 'Weekly Snapshots', 'Coaching Log', 'AI Coaching', 'Alerts'] as const;
 
 const moodEmoji: Record<string, string> = {
   enthusiastic: '🔥', engaged: '😊', neutral: '😐', frustrated: '😤', disengaged: '😞', cold_feet: '🥶',
@@ -33,11 +33,8 @@ export default function TransitionDetail() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>(initialTab);
 
   const { data: transition, isLoading: tLoading } = useTransition(id);
-  const { data: updates = [], isLoading: uLoading } = useWeeklyUpdates(id);
   const { data: logs = [], isLoading: lLoading } = useCoachingLogs(id);
   const { data: alerts = [] } = useAlerts(id);
-
-  const latest = updates.length > 0 ? updates[0] : undefined;
 
   // Risk scoring
   const [calibration, setCalibration] = useState<ActiveWeightsResult | null>(null);
@@ -84,21 +81,27 @@ export default function TransitionDetail() {
   const { intel, loading: intelLoading, refresh: refreshIntel } = useTransitionIntelligence(transition);
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
 
-  if (tLoading || uLoading || lLoading) return <DetailSkeleton />;
+  const snapshots = intel?.snapshots ?? [];
+  const latestSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+
+  if (tLoading || lLoading) return <DetailSkeleton />;
   if (!transition) return <div className="text-center py-12 text-muted-foreground">Transition not found</div>;
 
-  // Chart data
+  // Chart data from snapshots
   const totalWeeks = transition.total_weeks || 20;
+  const startDate = new Date(transition.transition_start);
   const chartData = Array.from({ length: totalWeeks + 1 }, (_, i) => {
     const pct = i / totalWeeks;
     const expected = Math.round(transition.guidance_number * getExpectedPct(pct));
-    const update = updates.find(u => u.week_number === i);
-    return { week: i, expected, actual: update?.current_paid_members ?? null };
+    return { week: i, expected, actual: null as number | null };
   });
-  const sortedUpdates = [...updates].sort((a, b) => a.week_number - b.week_number);
-  sortedUpdates.forEach(u => {
-    const idx = chartData.findIndex(d => d.week === u.week_number);
-    if (idx >= 0) chartData[idx].actual = u.current_paid_members;
+  // Map snapshots to week indices
+  snapshots.forEach(s => {
+    const snapDate = new Date(s.week_ending_date);
+    const weekIdx = Math.round((snapDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    if (weekIdx >= 0 && weekIdx <= totalWeeks) {
+      chartData[weekIdx] = { ...chartData[weekIdx], actual: s.paid_members };
+    }
   });
 
   return (
@@ -112,7 +115,7 @@ export default function TransitionDetail() {
           <p className="text-sm text-muted-foreground">{transition.specialty} • {transition.city}, {transition.state} • {transition.coc_type}</p>
         </div>
         <div className="ml-auto">
-          <StatusBadge status={latest?.pacing_status || transition.risk_tier || 'LOW'} />
+          <StatusBadge status={latestSnap?.pacing_status || transition.risk_tier || 'LOW'} />
         </div>
       </div>
 
@@ -153,13 +156,12 @@ export default function TransitionDetail() {
               <div className="metric-card">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Progress</p>
                 <div className="text-2xl font-bold font-mono text-foreground">
-                  {transition.current_paid_members || 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
+                  {latestSnap?.paid_members ?? transition.current_paid_members ?? 0} <span className="text-muted-foreground text-base">/ {transition.guidance_number}</span>
                 </div>
-                <ProgressBar value={transition.current_paid_members || 0} max={transition.guidance_number} className="mt-2" />
-                {latest && (
+                <ProgressBar value={latestSnap?.paid_members ?? transition.current_paid_members ?? 0} max={transition.guidance_number} className="mt-2" />
+                {intel?.metrics && (
                   <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                    <p>Need {latest.members_per_week_needed}/week to hit guidance</p>
-                    <p>Projected opening: {latest.projected_opening_number}</p>
+                    <p>Projected at opening: {intel.metrics.projected_paid_at_opening}</p>
                   </div>
                 )}
               </div>
@@ -169,11 +171,11 @@ export default function TransitionDetail() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">PA</span><span className="text-foreground">{transition.assigned_pa}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">PTM</span><span className="text-foreground">{transition.assigned_ptm}</span></div>
-                  {latest && (
+                  {latestSnap && (
                     <>
-                      <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latest.pa_effectiveness_rating || 0} /></div>
-                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latest.physician_engagement_rating || 0} /></div>
-                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latest.staff_engagement_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">PA Rating</span><StarRating value={latestSnap.pa_effectiveness_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Physician</span><StarRating value={latestSnap.physician_engagement_rating || 0} /></div>
+                      <div className="flex justify-between items-center"><span className="text-muted-foreground">Staff</span><StarRating value={latestSnap.staff_engagement_rating || 0} /></div>
                     </>
                   )}
                 </div>
@@ -196,9 +198,12 @@ export default function TransitionDetail() {
           </div>
 
           <div className="flex gap-3 flex-wrap">
-            <Link to={`/transitions/${id}/update`} className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors">
-              Log Weekly Update
-            </Link>
+            <button
+              onClick={() => setSnapshotModalOpen(true)}
+              className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors"
+            >
+              Log Weekly Snapshot
+            </button>
             <Link to={`/transitions/${id}/coaching/new`} className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">
               Log Coaching Interaction
             </Link>
@@ -206,34 +211,45 @@ export default function TransitionDetail() {
         </div>
       )}
 
-      {activeTab === 'Weekly Updates' && (
+      {activeTab === 'Weekly Snapshots' && (
         <div className="space-y-4">
-          <Link to={`/transitions/${id}/update`} className="inline-flex px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors">
-            + Log Weekly Update
-          </Link>
-          {updates.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No weekly updates yet.</p>
+          <button
+            onClick={() => setSnapshotModalOpen(true)}
+            className="inline-flex px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors"
+          >
+            + Log Weekly Snapshot
+          </button>
+          {snapshots.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No weekly snapshots yet.</p>
           ) : (
             <div className="space-y-3">
-              {updates.map(u => (
-                <div key={u.id} className="metric-card">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="font-mono font-bold text-foreground">W{u.week_number}</span>
-                    <span className="text-sm text-muted-foreground">{u.update_date}</span>
-                    <StatusBadge status={u.pacing_status || 'ON_TRACK'} />
-                    <span className="font-mono text-foreground">{u.current_paid_members} members</span>
-                    <span className={cn('text-sm font-mono', (u.net_change_from_last_week || 0) >= 0 ? 'text-status-ahead' : 'text-status-critical')}>
-                      {(u.net_change_from_last_week || 0) >= 0 ? '+' : ''}{u.net_change_from_last_week}
-                    </span>
+              {[...snapshots].reverse().map(s => {
+                const prevIdx = snapshots.indexOf(s) - 1;
+                const prev = prevIdx >= 0 ? snapshots[prevIdx] : null;
+                const change = prev ? s.paid_members - prev.paid_members : null;
+                return (
+                  <div key={s.id} className="metric-card">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-sm text-muted-foreground">{s.week_ending_date}</span>
+                      {s.pacing_status && <StatusBadge status={s.pacing_status} />}
+                      <span className="font-mono text-foreground">{s.paid_members} members</span>
+                      {change !== null && (
+                        <span className={cn('text-sm font-mono', change >= 0 ? 'text-status-ahead' : 'text-status-critical')}>
+                          {change >= 0 ? '+' : ''}{change}
+                        </span>
+                      )}
+                    </div>
+                    {(s.pa_effectiveness_rating || s.physician_engagement_rating || s.staff_engagement_rating) && (
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        {s.pa_effectiveness_rating && <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">PA</span><StarRating value={s.pa_effectiveness_rating} /></div>}
+                        {s.physician_engagement_rating && <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Dr</span><StarRating value={s.physician_engagement_rating} /></div>}
+                        {s.staff_engagement_rating && <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Staff</span><StarRating value={s.staff_engagement_rating} /></div>}
+                      </div>
+                    )}
+                    {s.notes && <p className="text-sm text-muted-foreground mt-2">{s.notes}</p>}
                   </div>
-                  <div className="flex items-center gap-4 mt-2 flex-wrap">
-                    <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">PA</span><StarRating value={u.pa_effectiveness_rating || 0} /></div>
-                    <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Dr</span><StarRating value={u.physician_engagement_rating || 0} /></div>
-                    <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">Staff</span><StarRating value={u.staff_engagement_rating || 0} /></div>
-                  </div>
-                  {u.notes && <p className="text-sm text-muted-foreground mt-2">{u.notes}</p>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -286,7 +302,7 @@ export default function TransitionDetail() {
       )}
 
       {activeTab === 'AI Coaching' && (
-        <AICoachingTab transition={transition} updates={updates} logs={logs} latest={latest} />
+        <AICoachingTab transition={transition} snapshots={snapshots} logs={logs} />
       )}
 
       {activeTab === 'Alerts' && (

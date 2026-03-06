@@ -10,7 +10,6 @@ import Dashboard from "./pages/Dashboard";
 import TransitionsList from "./pages/TransitionsList";
 import NewTransition from "./pages/NewTransition";
 import TransitionDetail from "./pages/TransitionDetail";
-import WeeklyUpdateForm from "./pages/WeeklyUpdateForm";
 import CoachingLogForm from "./pages/CoachingLogForm";
 import DataImport from "./pages/DataImport";
 import ModelCalibration from "./pages/ModelCalibration";
@@ -42,7 +41,6 @@ function ProtectedRoutes() {
           <Route path="/transitions" element={<TransitionsList />} />
           <Route path="/transitions/new" element={<NewTransition />} />
           <Route path="/transitions/:id" element={<TransitionDetail />} />
-          <Route path="/transitions/:id/update" element={<WeeklyUpdateForm />} />
           <Route path="/transitions/:id/coaching/new" element={<CoachingLogForm />} />
           <Route path="/import" element={<DataImport />} />
           <Route path="/calibration" element={<ModelCalibration />} />

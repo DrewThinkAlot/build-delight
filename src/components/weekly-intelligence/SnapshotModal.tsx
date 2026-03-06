@@ -4,9 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { StarRating } from '@/components/shared/StarRating';
 import { upsertSnapshot } from '@/hooks/useWeeklySnapshots';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import type { Transition } from '@/types/transition';
 
 interface SnapshotModalProps {
@@ -19,7 +21,6 @@ interface SnapshotModalProps {
 function getWeekEndingDate(): string {
   const d = new Date();
   const day = d.getDay();
-  // Next Sunday (or today if Sunday)
   const diff = day === 0 ? 0 : 7 - day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().split('T')[0];
@@ -27,6 +28,7 @@ function getWeekEndingDate(): string {
 
 export function SnapshotModal({ open, onOpenChange, transition, onSaved }: SnapshotModalProps) {
   const [saving, setSaving] = useState(false);
+  const [showDetailed, setShowDetailed] = useState(false);
   const [form, setForm] = useState({
     week_ending_date: getWeekEndingDate(),
     paid_members: transition.current_paid_members || 0,
@@ -37,6 +39,22 @@ export function SnapshotModal({ open, onOpenChange, transition, onSaved }: Snaps
     notes: '',
     strategic_activities: '',
     strategy_changed: false,
+    // Detailed fields
+    pa_effectiveness_rating: 0,
+    physician_engagement_rating: 0,
+    staff_engagement_rating: 0,
+    physician_making_personal_calls: false,
+    forums_scheduled: 0,
+    forums_held: 0,
+    forum_attendance: '',
+    pa_swap_considered: false,
+    pa_swap_executed: false,
+    primary_obstacle: '',
+    obstacle_category: '',
+    what_worked_this_week: '',
+    what_didnt_work: '',
+    survey_prospects_left_pct: '',
+    wtc_remaining: '',
   });
 
   const handleSave = async () => {
@@ -54,6 +72,24 @@ export function SnapshotModal({ open, onOpenChange, transition, onSaved }: Snaps
         notes: form.notes || null,
         strategic_activities: form.strategic_activities || null,
         strategy_changed: form.strategy_changed,
+        // Detailed fields
+        pa_effectiveness_rating: form.pa_effectiveness_rating || null,
+        physician_engagement_rating: form.physician_engagement_rating || null,
+        staff_engagement_rating: form.staff_engagement_rating || null,
+        physician_making_personal_calls: form.physician_making_personal_calls,
+        forums_scheduled: form.forums_scheduled,
+        forums_held: form.forums_held,
+        forum_attendance: form.forum_attendance ? Number(form.forum_attendance) : null,
+        pa_swap_considered: form.pa_swap_considered,
+        pa_swap_executed: form.pa_swap_executed,
+        primary_obstacle: form.primary_obstacle || null,
+        obstacle_category: form.obstacle_category || null,
+        what_worked_this_week: form.what_worked_this_week || null,
+        what_didnt_work: form.what_didnt_work || null,
+        survey_prospects_left_pct: form.survey_prospects_left_pct ? Number(form.survey_prospects_left_pct) : null,
+        wtc_remaining: form.wtc_remaining ? Number(form.wtc_remaining) : null,
+        pacing_status: null,
+        week_number: null,
       });
       if (result.success) {
         toast.success('Snapshot saved');
@@ -73,12 +109,13 @@ export function SnapshotModal({ open, onOpenChange, transition, onSaved }: Snaps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-card border-border">
+      <DialogContent className="sm:max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-foreground">Log Weekly Snapshot</DialogTitle>
           <p className="text-xs text-muted-foreground">{transition.physician_name}</p>
         </DialogHeader>
         <div className="space-y-4 mt-2">
+          {/* Quick mode fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs text-muted-foreground">Week Ending</Label>
@@ -124,6 +161,123 @@ export function SnapshotModal({ open, onOpenChange, transition, onSaved }: Snaps
             <Label className="text-sm text-foreground">Strategy Changed This Week?</Label>
             <Switch checked={form.strategy_changed} onCheckedChange={v => update('strategy_changed', v)} />
           </div>
+
+          {/* Detailed mode toggle */}
+          <button
+            type="button"
+            onClick={() => setShowDetailed(!showDetailed)}
+            className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors w-full"
+          >
+            {showDetailed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            Detailed Assessment (ratings, obstacles, forums)
+          </button>
+
+          {showDetailed && (
+            <div className="space-y-4 border-t border-border pt-4">
+              {/* Ratings */}
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Team Ratings</p>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">PA Effectiveness</Label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(v => (
+                      <button key={v} type="button" onClick={() => update('pa_effectiveness_rating', form.pa_effectiveness_rating === v ? 0 : v)}
+                        className={cn('w-7 h-7 rounded text-xs font-medium transition-colors',
+                          form.pa_effectiveness_rating >= v ? 'bg-accent text-accent-foreground' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                        )}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Physician Engagement</Label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(v => (
+                      <button key={v} type="button" onClick={() => update('physician_engagement_rating', form.physician_engagement_rating === v ? 0 : v)}
+                        className={cn('w-7 h-7 rounded text-xs font-medium transition-colors',
+                          form.physician_engagement_rating >= v ? 'bg-accent text-accent-foreground' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                        )}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Staff Engagement</Label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(v => (
+                      <button key={v} type="button" onClick={() => update('staff_engagement_rating', form.staff_engagement_rating === v ? 0 : v)}
+                        className={cn('w-7 h-7 rounded text-xs font-medium transition-colors',
+                          form.staff_engagement_rating >= v ? 'bg-accent text-accent-foreground' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                        )}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Forums & Calls */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Forums Scheduled</Label>
+                  <Input type="number" value={form.forums_scheduled} onChange={e => update('forums_scheduled', e.target.value)} className="bg-muted/30 border-border" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Forums Held</Label>
+                  <Input type="number" value={form.forums_held} onChange={e => update('forums_held', e.target.value)} className="bg-muted/30 border-border" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Forum Attendance</Label>
+                  <Input type="number" value={form.forum_attendance} onChange={e => update('forum_attendance', e.target.value)} placeholder="—" className="bg-muted/30 border-border" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label className="text-sm text-foreground">Physician Making Personal Calls?</Label>
+                <Switch checked={form.physician_making_personal_calls} onCheckedChange={v => update('physician_making_personal_calls', v)} />
+              </div>
+
+              {/* Pipeline */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Survey Prospects Left %</Label>
+                  <Input type="number" value={form.survey_prospects_left_pct} onChange={e => update('survey_prospects_left_pct', e.target.value)} placeholder="—" className="bg-muted/30 border-border" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">WTC 55+ Remaining</Label>
+                  <Input type="number" value={form.wtc_remaining} onChange={e => update('wtc_remaining', e.target.value)} placeholder="—" className="bg-muted/30 border-border" />
+                </div>
+              </div>
+
+              {/* PA Swap */}
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.pa_swap_considered} onCheckedChange={v => update('pa_swap_considered', v)} />
+                  <Label className="text-xs text-muted-foreground">PA Swap Considered</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.pa_swap_executed} onCheckedChange={v => update('pa_swap_executed', v)} />
+                  <Label className="text-xs text-muted-foreground">PA Swap Executed</Label>
+                </div>
+              </div>
+
+              {/* Obstacles */}
+              <div>
+                <Label className="text-xs text-muted-foreground">Primary Obstacle</Label>
+                <Input value={form.primary_obstacle} onChange={e => update('primary_obstacle', e.target.value)} placeholder="What's the main blocker?" className="bg-muted/30 border-border" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Obstacle Category</Label>
+                <Input value={form.obstacle_category} onChange={e => update('obstacle_category', e.target.value)} placeholder="e.g. physician engagement, PA performance…" className="bg-muted/30 border-border" />
+              </div>
+
+              {/* Learnings */}
+              <div>
+                <Label className="text-xs text-muted-foreground">What Worked This Week</Label>
+                <Textarea value={form.what_worked_this_week} onChange={e => update('what_worked_this_week', e.target.value)} placeholder="Wins and effective tactics…" className="bg-muted/30 border-border h-16" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">What Didn't Work</Label>
+                <Textarea value={form.what_didnt_work} onChange={e => update('what_didnt_work', e.target.value)} placeholder="Tactics that fell flat…" className="bg-muted/30 border-border h-16" />
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handleSave}
