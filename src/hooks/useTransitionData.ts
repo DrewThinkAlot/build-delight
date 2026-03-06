@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import type { Transition, WeeklyUpdate, CoachingLog, Alert } from '@/types/transition';
+import type { Transition, CoachingLog, Alert } from '@/types/transition';
 
 // ── Transitions ────────────────────────────────────────────────
 
@@ -72,51 +72,6 @@ export function useUpdateTransition() {
   });
 }
 
-// ── Weekly Updates ─────────────────────────────────────────────
-
-export function useWeeklyUpdates(transitionId: string | undefined) {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['weeklyUpdates', transitionId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('weekly_updates')
-        .select('*')
-        .eq('transition_id', transitionId!)
-        .order('week_number', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as WeeklyUpdate[];
-    },
-    enabled: !!user && !!transitionId,
-  });
-}
-
-export function useAddWeeklyUpdate() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (u: Omit<WeeklyUpdate, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('weekly_updates')
-        .insert({ ...u, user_id: user!.id } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      // Also update transition's current_paid_members
-      await supabase
-        .from('transitions')
-        .update({ current_paid_members: u.current_paid_members, updated_at: new Date().toISOString() } as any)
-        .eq('id', u.transition_id);
-      return data as unknown as WeeklyUpdate;
-    },
-    onSuccess: (_, u) => {
-      qc.invalidateQueries({ queryKey: ['weeklyUpdates', u.transition_id] });
-      qc.invalidateQueries({ queryKey: ['transition', u.transition_id] });
-      qc.invalidateQueries({ queryKey: ['transitions'] });
-    },
-  });
-}
-
 // ── Coaching Logs ──────────────────────────────────────────────
 
 export function useCoachingLogs(transitionId: string | undefined) {
@@ -176,25 +131,7 @@ export function useAlerts(transitionId?: string) {
   });
 }
 
-// ── All weekly updates for dashboard ──────────────────────────
-
-export function useAllWeeklyUpdates(transitionIds: string[]) {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['allWeeklyUpdates', transitionIds.sort().join(',')],
-    queryFn: async () => {
-      if (transitionIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('weekly_updates')
-        .select('*')
-        .in('transition_id', transitionIds)
-        .order('week_number', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as WeeklyUpdate[];
-    },
-    enabled: !!user && transitionIds.length > 0,
-  });
-}
+// ── All coaching logs for dashboard ──────────────────────────
 
 export function useAllCoachingLogs(transitionIds: string[]) {
   const { user } = useAuth();

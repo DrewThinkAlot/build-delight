@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { Transition, WeeklyUpdate, CoachingLog } from '@/types/transition';
+import { Transition, CoachingLog } from '@/types/transition';
+import { WeeklySnapshot } from '@/types/weeklyIntelligence';
 import { CoachingFeature } from '@/lib/aiPrompts';
 import {
   GenerationResult,
@@ -15,20 +16,15 @@ export function useCoachingAI() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
 
-  /**
-   * Full pipeline: assemble context → build prompt → stream from edge function.
-   * Checks cache first to avoid unnecessary API calls.
-   */
   const generateForTransition = useCallback(async (
     transition: Transition,
-    updates: WeeklyUpdate[],
+    snapshots: WeeklySnapshot[],
     logs: CoachingLog[],
     feature: CoachingFeature,
     skipCache = false
   ) => {
-    // Check cache first
     if (!skipCache) {
-      const cached = getCachedContent(updates, feature);
+      const cached = getCachedContent(snapshots, feature);
       if (cached) {
         setContent(cached);
         setResult({
@@ -47,14 +43,12 @@ export function useCoachingAI() {
     setResult(null);
 
     try {
-      // 1. Assemble context & build prompt
       const { prompt } = await prepareCoachingGeneration(
-        transition, updates, logs, feature
+        transition, snapshots, logs, feature
       );
 
-      // 2. Stream from edge function with timeout/abort
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90_000); // 90s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
       let resp: Response;
       let lastError: Error | null = null;
@@ -77,7 +71,6 @@ export function useCoachingAI() {
             break;
           }
 
-          // Don't retry client errors (4xx) except 429
           if (resp.status === 429 && attempt < MAX_RETRIES) {
             await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
             continue;
@@ -136,7 +129,6 @@ export function useCoachingAI() {
         }
       }
 
-      // Flush remaining buffer
       if (buffer.trim()) {
         for (let raw of buffer.split('\n')) {
           if (!raw) continue;

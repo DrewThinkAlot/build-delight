@@ -1,4 +1,5 @@
-import { Transition, WeeklyUpdate, CoachingLog } from '@/types/transition';
+import { Transition, CoachingLog } from '@/types/transition';
+import { WeeklySnapshot } from '@/types/weeklyIntelligence';
 import { getExpectedPct } from '@/lib/enrollmentCurve';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -61,12 +62,12 @@ export interface CoachingEntry {
 
 export function assembleCoachingContext(
   transition: Transition,
-  updates: WeeklyUpdate[],
+  snapshots: WeeklySnapshot[],
   logs: CoachingLog[],
   benchmarks: Record<string, any> | null
 ): CoachingContext {
-  const latest = updates.length > 0 ? updates[0] : undefined; // already sorted desc
-  const recentUpdates = updates.slice(0, 4);
+  const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : undefined;
+  const recentSnapshots = snapshots.slice(-4);
 
   // Timeline
   const startDate = new Date(transition.transition_start);
@@ -81,10 +82,17 @@ export function assembleCoachingContext(
   const expectedMembers = Math.round(transition.guidance_number * expectedPct);
   const remainingPct = 1.0 - expectedPct;
 
-  const currentMembers = latest?.current_paid_members ?? transition.current_paid_members ?? 0;
+  const currentMembers = latest?.paid_members ?? transition.current_paid_members ?? 0;
   const membersNeeded = transition.guidance_number - currentMembers;
   const perWeekNeeded = weeksRemaining > 0 ? Math.ceil(membersNeeded / weeksRemaining) : membersNeeded;
   const projectedOpening = expectedPct > 0 ? Math.round(currentMembers / expectedPct) : currentMembers;
+
+  // WoW changes from snapshots
+  const wowChanges: number[] = [];
+  for (let i = 1; i < recentSnapshots.length; i++) {
+    wowChanges.push(recentSnapshots[i].paid_members - recentSnapshots[i - 1].paid_members);
+  }
+  const netChange = wowChanges.length > 0 ? wowChanges[wowChanges.length - 1] : 0;
 
   // Coaching entries
   const last3Logs: CoachingEntry[] = logs.slice(0, 3).map(e => ({
@@ -97,7 +105,6 @@ export function assembleCoachingContext(
     topics_covered: e.topics_covered || '',
   }));
 
-  // Benchmarks
   const similarHitRate = findSimilarHitRate(transition, benchmarks);
 
   return {
@@ -130,8 +137,8 @@ export function assembleCoachingContext(
     forums_scheduled: latest?.forums_scheduled ?? 0,
     survey_prospects_left_pct: latest?.survey_prospects_left_pct ?? 0,
     wtc_remaining: latest?.wtc_remaining ?? 0,
-    net_change: latest?.net_change_from_last_week ?? 0,
-    last_4_weeks_trend: recentUpdates.reverse().map(u => u.net_change_from_last_week ?? 0),
+    net_change: netChange,
+    last_4_weeks_trend: wowChanges,
     primary_obstacle: latest?.primary_obstacle || 'None identified',
     obstacle_category: latest?.obstacle_category || 'other',
     what_worked: latest?.what_worked_this_week || 'Not specified',

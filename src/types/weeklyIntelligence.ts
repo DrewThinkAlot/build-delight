@@ -13,6 +13,24 @@ export interface WeeklySnapshot {
   strategic_activities: string | null;
   notes: string | null;
   strategy_changed: boolean;
+  // Extended fields (consolidated from weekly_updates) — all optional/nullable
+  pa_effectiveness_rating?: number | null;
+  physician_engagement_rating?: number | null;
+  staff_engagement_rating?: number | null;
+  physician_making_personal_calls?: boolean;
+  forums_scheduled?: number;
+  forums_held?: number;
+  forum_attendance?: number | null;
+  pa_swap_considered?: boolean;
+  pa_swap_executed?: boolean;
+  primary_obstacle?: string | null;
+  obstacle_category?: string | null;
+  what_worked_this_week?: string | null;
+  what_didnt_work?: string | null;
+  survey_prospects_left_pct?: number | null;
+  wtc_remaining?: number | null;
+  pacing_status?: string | null;
+  week_number?: number | null;
   created_at: string;
   updated_at: string;
 }

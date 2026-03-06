@@ -457,53 +457,104 @@ export type Database = {
         Row: {
           created_at: string | null
           doctor_calls_last_week: number | null
+          forum_attendance: number | null
+          forums_held: number | null
+          forums_scheduled: number | null
           guidance_number: number
           id: string
           notes: string | null
+          obstacle_category: string | null
+          pa_effectiveness_rating: number | null
+          pa_swap_considered: boolean | null
+          pa_swap_executed: boolean | null
+          pacing_status: string | null
           paid_members: number
+          physician_engagement_rating: number | null
+          physician_making_personal_calls: boolean | null
+          primary_obstacle: string | null
+          staff_engagement_rating: number | null
           strategic_activities: string | null
           strategy_changed: boolean | null
+          survey_prospects_left_pct: number | null
           touches_mer_last_week: number | null
           touches_pa_last_week: number | null
           transition_id: string
           updated_at: string | null
           user_id: string | null
           week_ending_date: string
+          week_number: number | null
           weekly_needed_to_hit_guidance: number | null
+          what_didnt_work: string | null
+          what_worked_this_week: string | null
+          wtc_remaining: number | null
         }
         Insert: {
           created_at?: string | null
           doctor_calls_last_week?: number | null
+          forum_attendance?: number | null
+          forums_held?: number | null
+          forums_scheduled?: number | null
           guidance_number: number
           id?: string
           notes?: string | null
+          obstacle_category?: string | null
+          pa_effectiveness_rating?: number | null
+          pa_swap_considered?: boolean | null
+          pa_swap_executed?: boolean | null
+          pacing_status?: string | null
           paid_members?: number
+          physician_engagement_rating?: number | null
+          physician_making_personal_calls?: boolean | null
+          primary_obstacle?: string | null
+          staff_engagement_rating?: number | null
           strategic_activities?: string | null
           strategy_changed?: boolean | null
+          survey_prospects_left_pct?: number | null
           touches_mer_last_week?: number | null
           touches_pa_last_week?: number | null
           transition_id: string
           updated_at?: string | null
           user_id?: string | null
           week_ending_date: string
+          week_number?: number | null
           weekly_needed_to_hit_guidance?: number | null
+          what_didnt_work?: string | null
+          what_worked_this_week?: string | null
+          wtc_remaining?: number | null
         }
         Update: {
           created_at?: string | null
           doctor_calls_last_week?: number | null
+          forum_attendance?: number | null
+          forums_held?: number | null
+          forums_scheduled?: number | null
           guidance_number?: number
           id?: string
           notes?: string | null
+          obstacle_category?: string | null
+          pa_effectiveness_rating?: number | null
+          pa_swap_considered?: boolean | null
+          pa_swap_executed?: boolean | null
+          pacing_status?: string | null
           paid_members?: number
+          physician_engagement_rating?: number | null
+          physician_making_personal_calls?: boolean | null
+          primary_obstacle?: string | null
+          staff_engagement_rating?: number | null
           strategic_activities?: string | null
           strategy_changed?: boolean | null
+          survey_prospects_left_pct?: number | null
           touches_mer_last_week?: number | null
           touches_pa_last_week?: number | null
           transition_id?: string
           updated_at?: string | null
           user_id?: string | null
           week_ending_date?: string
+          week_number?: number | null
           weekly_needed_to_hit_guidance?: number | null
+          what_didnt_work?: string | null
+          what_worked_this_week?: string | null
+          wtc_remaining?: number | null
         }
         Relationships: []
       }

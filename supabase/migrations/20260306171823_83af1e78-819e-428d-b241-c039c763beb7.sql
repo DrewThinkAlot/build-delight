@@ -1,0 +1,18 @@
+ALTER TABLE public.weekly_snapshots
+  ADD COLUMN IF NOT EXISTS pa_effectiveness_rating integer,
+  ADD COLUMN IF NOT EXISTS physician_engagement_rating integer,
+  ADD COLUMN IF NOT EXISTS staff_engagement_rating integer,
+  ADD COLUMN IF NOT EXISTS physician_making_personal_calls boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS forums_scheduled integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS forums_held integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS forum_attendance integer,
+  ADD COLUMN IF NOT EXISTS pa_swap_considered boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS pa_swap_executed boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS primary_obstacle text,
+  ADD COLUMN IF NOT EXISTS obstacle_category text,
+  ADD COLUMN IF NOT EXISTS what_worked_this_week text,
+  ADD COLUMN IF NOT EXISTS what_didnt_work text,
+  ADD COLUMN IF NOT EXISTS survey_prospects_left_pct numeric,
+  ADD COLUMN IF NOT EXISTS wtc_remaining integer,
+  ADD COLUMN IF NOT EXISTS pacing_status text,
+  ADD COLUMN IF NOT EXISTS week_number integer;

@@ -34,46 +34,6 @@ export interface Transition {
   updated_at?: string;
 }
 
-export interface WeeklyUpdate {
-  id: string;
-  transition_id: string;
-  week_number: number;
-  update_date: string;
-  current_paid_members: number;
-  net_change_from_last_week?: number;
-  survey_prospects_left_pct?: number;
-  wtc_remaining?: number;
-  expected_members_at_this_point?: number;
-  pacing_status?: 'AHEAD' | 'ON_TRACK' | 'BEHIND' | 'CRITICAL';
-  pct_to_guidance?: number;
-  projected_opening_number?: number;
-  members_per_week_needed?: number;
-  pa_effectiveness_rating?: number;
-  physician_engagement_rating?: number;
-  staff_engagement_rating?: number;
-  physician_making_personal_calls: boolean;
-  forums_scheduled: number;
-  forums_held: number;
-  forum_attendance?: number;
-  pa_swap_considered: boolean;
-  pa_swap_executed: boolean;
-  strategy_change_made: boolean;
-  strategy_change_description?: string;
-  notes?: string;
-  primary_obstacle?: string;
-  obstacle_category?: string;
-  what_worked_this_week?: string;
-  what_didnt_work?: string;
-  leadership_update_sent: boolean;
-  ptm_sync_completed: boolean;
-  physician_coaching_call_completed: boolean;
-  ai_situation_assessment?: string;
-  ai_recommended_actions?: string;
-  ai_physician_coaching_plan?: string;
-  ai_leadership_talking_points?: string;
-  created_at?: string;
-}
-
 export interface CoachingLog {
   id: string;
   transition_id: string;
