@@ -147,7 +147,7 @@ export function useAllTransitionsIntelligence(transitions: Transition[]) {
 
 // ── Upsert snapshot ───────────────────────────────────────────────────
 
-export async function upsertSnapshot(snapshot: Omit<WeeklySnapshot, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; error?: string }> {
+export async function upsertSnapshot(snapshot: Partial<WeeklySnapshot> & { transition_id: string; week_ending_date: string; paid_members: number; guidance_number: number }): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase
     .from('weekly_snapshots' as any)
     .upsert(
